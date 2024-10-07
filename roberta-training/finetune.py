@@ -2,6 +2,8 @@ from transformers import RobertaTokenizer, RobertaForSequenceClassification
 from datasets import load_dataset
 from transformers import Trainer, TrainingArguments
 
+import torch
+
 #model_dir = "./baidu-model"
 #output_dir = "./baidu-afqmc-finetuned"
 
@@ -23,10 +25,12 @@ def finetune(tokenized_dataset, model_dir, output_dir):
     training_args = TrainingArguments(
         output_dir=output_dir,
         overwrite_output_dir=True,
-        evaluation_strategy="epoch",
+        evaluation_strategy="steps",
+        eval_steps=500,
+        logging_steps=500,
         learning_rate=2e-5,
-        per_device_train_batch_size=64,
-        per_device_eval_batch_size=64,
+        per_device_train_batch_size=32,
+        per_device_eval_batch_size=32,
         num_train_epochs=3,
     )
 

@@ -1,4 +1,4 @@
-from transformers import RobertaTokenizer, RobertaForSequenceClassification
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import torch.nn.functional as F
 
@@ -6,16 +6,18 @@ import torch.nn.functional as F
 
 def test_model(model_path, sentence1, sentence2):
     # Load model and tokenizer
-    model = RobertaForSequenceClassification.from_pretrained(model_path)
-    tokenizer = RobertaTokenizer.from_pretrained(model_path)
+    model = AutoModelForSequenceClassification.from_pretrained(model_path)
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
     model.eval()
 
     # Tokenize the input sentences
     inputs = tokenizer(sentence1, sentence2, return_tensors='pt', padding=True, truncation=True, max_length=512)
+    print(inputs)
 
     # Perform inference
     with torch.no_grad():
         outputs = model(**inputs)
+       
 
     # Get the logits (raw predictions)
     logits = outputs.logits
@@ -41,5 +43,5 @@ if __name__ == "__main__":
     test_model(model_path, "你好吗？", "你好吗？")
     test_model(model_path, "一顶帽子有什么可怕的？", "为什么要怕这顶帽子？")
     test_model(model_path, "我喜欢你", "我喜欢你的狗")
-    
+    test_model(model_path, '商家支持花呗，我的账户却不能用', '商家有花呗交易，我还是不能用花呗付款')
     

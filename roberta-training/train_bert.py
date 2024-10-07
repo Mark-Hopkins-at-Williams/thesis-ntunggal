@@ -23,6 +23,7 @@ def train_byte_level_tokenizer(text_file, model_dir):
         "<s>", "<pad>", "</s>", "<unk>", "<mask>",
     ])
     
+    
     if not os.path.exists(model_dir):
         os.mkdir(model_dir)
     else:
@@ -50,7 +51,6 @@ def train_roberta(tokenizer, text_file, output_dir):
         type_vocab_size=1,
     )
     model = RobertaForMaskedLM(config=config)
-    print(f'model parameters: {model.num_parameters()}')
     dataset = LineByLineTextDataset(
         tokenizer=tokenizer,
         file_path=text_file,
