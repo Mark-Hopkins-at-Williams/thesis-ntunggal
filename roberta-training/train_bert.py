@@ -22,6 +22,7 @@ def train_byte_level_tokenizer(text_file, model_dir):
     tokenizer.train(files=[text_file], vocab_size=VOCAB_SIZE, min_frequency=2, special_tokens=[
         "<s>", "<pad>", "</s>", "<unk>", "<mask>",
     ])
+    
     if not os.path.exists(model_dir):
         os.mkdir(model_dir)
     else:
@@ -33,10 +34,9 @@ def train_byte_level_tokenizer(text_file, model_dir):
         "max_len": 512,
         "do_lower_case": False,  # if your corpus is case-sensitive
     }
+    
     with open(os.path.join(model_dir, "tokenizer_config.json"), "w") as f:
         json.dump(tokenizer_config, f)
-
-    
 
     tokenizer = RobertaTokenizer.from_pretrained(model_dir)
     return tokenizer

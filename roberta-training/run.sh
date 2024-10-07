@@ -6,4 +6,5 @@
 #SBATCH -o log_%j.out  
 #SBATCH -e log_%j.err
 #SBATCH --gres=gpu:1
-python train_bert.py baidu.small.txt ./baidu-model
+#python thesis-ntunggal/roberta-training/train_bert.py baidubaike_small.txt ./baidu-model-small
+python thesis-ntunggal/roberta-training/finetune.py /mnt/storage/ntunggal/baidu-model/checkpoint-56263 ./baidu-model-finetuned
