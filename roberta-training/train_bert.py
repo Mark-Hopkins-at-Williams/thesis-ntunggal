@@ -62,10 +62,9 @@ def train_roberta(tokenizer, text_file, output_dir):
     training_args = TrainingArguments(
         output_dir=output_dir,
         overwrite_output_dir=True,
-        num_train_epochs=1,
+        num_train_epochs=3,
         per_device_train_batch_size=64,
-        save_steps=10_000,
-        save_total_limit=2,
+        save_strategy="epoch",
         prediction_loss_only=True,
     )
     trainer = Trainer(

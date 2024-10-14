@@ -1,15 +1,13 @@
 from transformers import RobertaTokenizer, RobertaForSequenceClassification
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from datasets import load_dataset
 from transformers import Trainer, TrainingArguments
 
 import torch
 
-#model_dir = "./baidu-model"
-#output_dir = "./baidu-afqmc-finetuned"
-
 def tokenize_dataset(model_dir):
     # Load tokenizer, AFQMC dataset from CLUE
-    tokenizer = RobertaTokenizer.from_pretrained(model_dir)
+    tokenizer = AutoTokenizer.from_pretrained(model_dir)
     dataset = load_dataset("clue", "afqmc")
 
     def tokenize_function(example):
@@ -21,7 +19,7 @@ def tokenize_dataset(model_dir):
 
 
 def finetune(tokenized_dataset, model_dir, output_dir):
-    model = RobertaForSequenceClassification.from_pretrained(model_dir, num_labels=2)
+    model = AutoModelForSequenceClassification.from_pretrained(model_dir, num_labels=2)
     training_args = TrainingArguments(
         output_dir=output_dir,
         overwrite_output_dir=True,
