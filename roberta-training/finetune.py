@@ -8,38 +8,13 @@ from datasets import load_dataset
 import evaluate
 from transformers import Trainer, TrainingArguments
 import numpy as np
+import argparse
 import torch
-import sys
+import time
+from evaluate_clue import tokenize_dataset, evaluate_on_task
 
 
-def tokenize_dataset(dataset, tokenizer, task_type):
-    """
-    Tokenize dataset for different task types.
-    - task_type: 'single' for single sentence tasks
-                 'pair' for sentence pair tasks
-                 'cluewsc' for cluewsc2020
-                 'csl' for csl
-    """
-    if task_type == 'single':
-        def tokenize_function(example):
-            return tokenizer(example['sentence'], truncation=True, padding="max_length", max_length=512)
-    elif task_type == 'cluewsc':
-        # cluewsc2020 has field 'text' instead of 'sentence'
-        def tokenize_function(example):
-            return tokenizer(example['text'], truncation=True, padding="max_length", max_length=512)
-    elif task_type == 'csl':
-        # csl has field 'abst' instead of 'sentence'
-        def tokenize_function(example):
-            return tokenizer(example['abst'], truncation=True, padding="max_length", max_length=512)
-    elif task_type == 'pair':
-        def tokenize_function(example):
-            return tokenizer(example['sentence1'], example['sentence2'], truncation=True, padding="max_length", max_length=512)
-    
-    return dataset.map(tokenize_function, batched=True)
-
-
-
-def finetune(tokenized_dataset, model_dir, output_dir, num_labels):
+def finetune(tokenized_dataset, model_dir, output_dir, num_labels, tokenizer):
     """
     General function to run the finetuning.
     """
@@ -61,7 +36,7 @@ def finetune(tokenized_dataset, model_dir, output_dir, num_labels):
         learning_rate=2e-5,
         per_device_train_batch_size=32,
         per_device_eval_batch_size=32,
-        num_train_epochs=3,
+        num_train_epochs=1,
     )
 
     trainer = Trainer(
@@ -73,6 +48,9 @@ def finetune(tokenized_dataset, model_dir, output_dir, num_labels):
     )
 
     trainer.train()
+    trainer.save_model(output_dir)
+    tokenizer.save_pretrained(output_dir)
+
 
 def finetune_on_task(model_dir, output_dir, task_name):
     """
@@ -108,12 +86,64 @@ def finetune_on_task(model_dir, output_dir, task_name):
     else:
         raise ValueError("Unknown task name.")
 
-    finetune(tokenized_dataset, model_dir, output_dir, num_labels)
+    finetune(tokenized_dataset, model_dir, output_dir, num_labels, tokenizer)
+
+
+def finetune_on_tasks(model_dir, output_dir, task_names, note="", log_file=None):
+    results = dict()
+    start_time = time.time()
+    for task in task_names:
+        finetune_on_task(model_dir, output_dir, task)
+        score = evaluate_on_task(output_dir, output_dir, task)
+        results[f'finetune-{task}'] = score
+    end_time = time.time()
+    results['base_model'] = model_dir
+    results['finetuning_time'] = end_time - start_time
+    results['notes'] = note
+    if log_file is not None:
+        write_results(log_file, results)
+      
+
+from pathlib import Path
+import os
+import csv
+
+def acquire_lock(filename, check_interval=1):
+    lock_file = filename + ".lock"
+    print(f"waiting to acquire lock for {filename}...")
+    while os.path.exists(lock_file):
+        time.sleep(check_interval)
+    print('...acquired!')
+    file_path = Path(lock_file)
+    file_path.touch()
+    
+def release_lock(filename):
+    lock_file = filename + ".lock"
+    if os.path.exists(lock_file):
+        os.remove(lock_file)
+    print(f'lock released on: {filename}')
+    
+
+     
+def write_results(filename, results):    
+    data = [results[key] for key in sorted(results.keys())]  
+    try:
+        acquire_lock(filename)  # Acquire the lock before writing
+        with open(filename, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(data)  # Write a new row
+        release_lock(filename)
+    except Exception:
+        release_lock(filename)
 
 
 if __name__ == "__main__":
-    model_dir = sys.argv[1]
-    output_dir = sys.argv[2]  
-    task = sys.argv[3]
-    
-    finetune_on_task(model_dir, output_dir, task)
+    parser = argparse.ArgumentParser(description="Finetuning script for NLLB models.")
+    parser.add_argument("--model_dir", type=str, required=True, help="Directory where the base model is located.")
+    parser.add_argument("--output_dir", type=str, required=True, help="Directory where the finetuned model will be located.")
+    parser.add_argument("--tasks", type=str, required=True, help="Tasks on which to finetune (comma separated)")
+    parser.add_argument("--note", type=str, help="Notes about experiment (optional)")
+    parser.add_argument("--log_file", type=str, required=True, help="Logging file for experiment results.ß")
+    args = parser.parse_args()
+    tasklist = args.tasks.split(',')    
+    finetune_on_tasks(args.model_dir, args.output_dir, tasklist, args.note, args.log_file)

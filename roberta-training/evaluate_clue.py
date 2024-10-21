@@ -99,6 +99,7 @@ def evaluate_on_task(model_path, tokenizer_path, task_name):
     # Run evaluation
     accuracy = evaluate(model, test_dataloader)
     print(f"Accuracy on {task_name} validation set: {accuracy}")
+    return accuracy
 
 
 if __name__ == "__main__":
