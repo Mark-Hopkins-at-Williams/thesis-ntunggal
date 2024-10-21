@@ -1,11 +1,13 @@
 """
-Finetune a pre-trained model on one of the CLUE benchmarks.
-This file takes in three arguments: the model directory, output directory, and benchmark
-Current benchmarks available are: tnews, iflytek, cluewsc2020, afqmc, csl, ocnli
+Evaluate a trained model on CLUE benchmarks.
+This file takes in three arguments: model path, tokenizer path, and the task to evaluate on
+Available tasks are as follows: tnews, iflytek, cluewsc2020, afqmc, csl, ocnli
 """
+import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from datasets import load_dataset
-from transformers import Trainer, TrainingArguments
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 import sys
 
 
@@ -33,39 +35,13 @@ def tokenize_dataset(dataset, tokenizer, task_type):
     return dataset.map(tokenize_function, batched=True)
 
 
-def finetune(tokenized_dataset, model_dir, output_dir, num_labels):
+def evaluate_on_task(model_path, tokenizer_path, task_name):
     """
-    General function to run the finetuning.
+    Evaluates the model on the given task.
     """
-    model = AutoModelForSequenceClassification.from_pretrained(model_dir, num_labels=num_labels)
-    training_args = TrainingArguments(
-        output_dir=output_dir,
-        overwrite_output_dir=True,
-        evaluation_strategy="steps",
-        eval_steps=500,
-        logging_steps=500,
-        learning_rate=2e-5,
-        per_device_train_batch_size=32,
-        per_device_eval_batch_size=32,
-        num_train_epochs=3,
-    )
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
 
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=tokenized_dataset["train"],
-        eval_dataset=tokenized_dataset["validation"],
-    )
-
-    trainer.train()
-
-def finetune_on_task(model_dir, output_dir, task_name):
-    """
-    Given a specific task to finetune on, will tokenize the dataset
-    and run finetuning on it.
-    """
-    tokenizer = AutoTokenizer.from_pretrained(model_dir)
-
+    # Load and tokenize dataset
     if task_name == "tnews":
         dataset = load_dataset("clue", "tnews")
         tokenized_dataset = tokenize_dataset(dataset, tokenizer, 'single')
@@ -92,13 +68,43 @@ def finetune_on_task(model_dir, output_dir, task_name):
         num_labels = 3
     else:
         raise ValueError("Unknown task name.")
+    
+    model = AutoModelForSequenceClassification.from_pretrained(model_path, num_labels=num_labels)
 
-    finetune(tokenized_dataset, model_dir, output_dir, num_labels)
+    # Create Dataloaders
+    batch_size = 16
+    tokenized_dataset.set_format("torch", columns=["input_ids", "attention_mask", "label"])
+    test_dataloader = DataLoader(tokenized_dataset['validation'], batch_size=batch_size)
+
+    # Evaluation function
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+
+    def evaluate(model, dataloader):
+        model.eval()
+        total, correct = 0, 0
+        with torch.no_grad():
+            for batch in tqdm(dataloader):
+                input_ids = batch['input_ids'].to(device)
+                attention_mask = batch['attention_mask'].to(device)
+                labels = batch['label'].to(device)
+
+                outputs = model(input_ids, attention_mask=attention_mask)
+                predictions = torch.argmax(outputs.logits, dim=-1)
+                correct += (predictions == labels).sum().item()
+                total += labels.size(0)
+
+        return correct / total
+
+    # Run evaluation
+    accuracy = evaluate(model, test_dataloader)
+    print(f"Accuracy on {task_name} validation set: {accuracy}")
 
 
 if __name__ == "__main__":
-    model_dir = sys.argv[1]
-    output_dir = sys.argv[2]  
+    model_path = sys.argv[1]
+    tokenizer_path = sys.argv[2]
     task = sys.argv[3]
+
+    evaluate_on_task(model_path, tokenizer_path, task)
     
-    finetune_on_task(model_dir, output_dir, task)
