@@ -5,7 +5,11 @@ Current benchmarks available are: tnews, iflytek, cluewsc2020, afqmc, csl, ocnli
 """
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from datasets import load_dataset
+import evaluate
 from transformers import Trainer, TrainingArguments
+import numpy as np
+
+import torch
 import sys
 
 
@@ -33,10 +37,19 @@ def tokenize_dataset(dataset, tokenizer, task_type):
     return dataset.map(tokenize_function, batched=True)
 
 
+
 def finetune(tokenized_dataset, model_dir, output_dir, num_labels):
     """
     General function to run the finetuning.
     """
+    accuracy_metric = evaluate.load("accuracy")
+    
+    def compute_metrics(eval_pred):
+        logits, labels = eval_pred
+        predictions = np.argmax(logits, axis=-1)
+        accuracy = accuracy_metric.compute(predictions=predictions, references=labels)
+        return accuracy
+    
     model = AutoModelForSequenceClassification.from_pretrained(model_dir, num_labels=num_labels)
     training_args = TrainingArguments(
         output_dir=output_dir,
@@ -55,6 +68,7 @@ def finetune(tokenized_dataset, model_dir, output_dir, num_labels):
         args=training_args,
         train_dataset=tokenized_dataset["train"],
         eval_dataset=tokenized_dataset["validation"],
+        compute_metrics=compute_metrics
     )
 
     trainer.train()
