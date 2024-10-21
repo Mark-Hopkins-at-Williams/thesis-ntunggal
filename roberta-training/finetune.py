@@ -8,7 +8,6 @@ from datasets import load_dataset
 import evaluate
 from transformers import Trainer, TrainingArguments
 import numpy as np
-
 import torch
 import sys
 
@@ -18,6 +17,8 @@ def tokenize_dataset(dataset, tokenizer, task_type):
     Tokenize dataset for different task types.
     - task_type: 'single' for single sentence tasks
                  'pair' for sentence pair tasks
+                 'cluewsc' for cluewsc2020
+                 'csl' for csl
     """
     if task_type == 'single':
         def tokenize_function(example):
