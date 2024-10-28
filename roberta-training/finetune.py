@@ -15,8 +15,9 @@ from evaluate_clue import tokenize_dataset, evaluate_on_task
 from pathlib import Path
 import os
 import csv
+import shutil
 
-def finetune(tokenized_dataset, model_dir, output_dir, num_labels, tokenizer):
+def finetune(tokenized_dataset, model_dir, output_dir, num_labels, tokenizer, task_name):
     """
     General function to run the finetuning.
     """
@@ -53,8 +54,18 @@ def finetune(tokenized_dataset, model_dir, output_dir, num_labels, tokenizer):
     )
 
     trainer.train()
-    trainer.save_model(output_dir)
-    tokenizer.save_pretrained(output_dir)
+
+    # Save model
+    model_save_path = os.path.join(output_dir, task_name)
+
+    if os.path.exists(model_save_path):
+        print("Warning: model directory already exists! Deleting old directory")
+        shutil.rmtree(model_save_path)
+    else:
+        os.mkdir(model_save_path)
+
+    trainer.save_model(model_save_path)
+    tokenizer.save_pretrained(model_save_path)
 
 
 def finetune_on_task(model_dir, output_dir, task_name):
@@ -91,7 +102,7 @@ def finetune_on_task(model_dir, output_dir, task_name):
     else:
         raise ValueError("Unknown task name.")
 
-    finetune(tokenized_dataset, model_dir, output_dir, num_labels, tokenizer)
+    finetune(tokenized_dataset, model_dir, output_dir, num_labels, tokenizer, task_name)
 
 
 def finetune_on_tasks(model_dir, output_dir, task_names, note="", log_file=None):
