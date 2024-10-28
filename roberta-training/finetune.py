@@ -12,7 +12,9 @@ import argparse
 import torch
 import time
 from evaluate_clue import tokenize_dataset, evaluate_on_task
-
+from pathlib import Path
+import os
+import csv
 
 def finetune(tokenized_dataset, model_dir, output_dir, num_labels, tokenizer):
     """
@@ -37,6 +39,9 @@ def finetune(tokenized_dataset, model_dir, output_dir, num_labels, tokenizer):
         per_device_train_batch_size=32,
         per_device_eval_batch_size=32,
         num_train_epochs=1,
+        load_best_model_at_end=True,
+        metric_for_best_model="accuracy",
+        greater_is_better=True,
     )
 
     trainer = Trainer(
@@ -104,10 +109,6 @@ def finetune_on_tasks(model_dir, output_dir, task_names, note="", log_file=None)
         write_results(log_file, results)
       
 
-from pathlib import Path
-import os
-import csv
-
 def acquire_lock(filename, check_interval=1):
     lock_file = filename + ".lock"
     print(f"waiting to acquire lock for {filename}...")
@@ -117,6 +118,7 @@ def acquire_lock(filename, check_interval=1):
     file_path = Path(lock_file)
     file_path.touch()
     
+
 def release_lock(filename):
     lock_file = filename + ".lock"
     if os.path.exists(lock_file):
@@ -124,7 +126,6 @@ def release_lock(filename):
     print(f'lock released on: {filename}')
     
 
-     
 def write_results(filename, results):    
     data = [results[key] for key in sorted(results.keys())]  
     try:
@@ -143,7 +144,7 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str, required=True, help="Directory where the finetuned model will be located.")
     parser.add_argument("--tasks", type=str, required=True, help="Tasks on which to finetune (comma separated)")
     parser.add_argument("--note", type=str, help="Notes about experiment (optional)")
-    parser.add_argument("--log_file", type=str, required=True, help="Logging file for experiment results.ß")
+    parser.add_argument("--log_file", type=str, required=True, help="Logging file for experiment results.")
     args = parser.parse_args()
     tasklist = args.tasks.split(',')    
     finetune_on_tasks(args.model_dir, args.output_dir, tasklist, args.note, args.log_file)
