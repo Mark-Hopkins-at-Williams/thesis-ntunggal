@@ -11,27 +11,28 @@ from tqdm import tqdm
 import sys
 
 
-def tokenize_dataset(dataset, tokenizer, task_type):
+def tokenize_dataset(dataset, tokenizer, task_type: str):
     """
     Tokenize dataset for different task types.
     - task_type: 'single' for single sentence tasks
                  'pair' for sentence pair tasks
     """
-    if task_type == 'single':
-        def tokenize_function(example):
-            return tokenizer(example['sentence'], truncation=True, padding="max_length", max_length=512)
-    elif task_type == 'cluewsc':
-        # cluewsc2020 has field 'text' instead of 'sentence'
-        def tokenize_function(example):
-            return tokenizer(example['text'], truncation=True, padding="max_length", max_length=512)
-    elif task_type == 'csl':
-        # csl has field 'abst' instead of 'sentence'
-        def tokenize_function(example):
-            return tokenizer(example['abst'], truncation=True, padding="max_length", max_length=512)
-    elif task_type == 'pair':
-        def tokenize_function(example):
-            return tokenizer(example['sentence1'], example['sentence2'], truncation=True, padding="max_length", max_length=512)
+    field_map = {
+        'single': ['sentence'],
+        'cluewsc': ['text'], # cluewsc2020 has field 'text' instead of 'sentence'
+        'csl': ['abst'], # csl has field 'abst' instead of 'sentence'
+        'pair': ['sentence1', 'sentence2']
+    }
     
+    if task_type not in field_map:
+        raise ValueError(f"Unknown task_type '{task_type}'.")
+
+    fields = field_map[task_type]
+    
+    # Define tokenization function
+    def tokenize_function(example):
+        return tokenizer(*[example[field] for field in fields], truncation=True, padding="max_length", max_length=512)
+
     return dataset.map(tokenize_function, batched=True)
 
 
