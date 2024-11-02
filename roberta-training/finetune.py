@@ -65,7 +65,7 @@ def finetune(tokenized_dataset, model_dir, output_dir, num_labels, tokenizer, ta
     training_args = TrainingArguments(
         output_dir=output_dir,
         overwrite_output_dir=True,
-        evaluation_strategy="steps",
+        eval_strategy="steps",
         eval_steps=500,
         logging_steps=500,
         learning_rate=2e-5,
@@ -132,22 +132,26 @@ def finetune_on_tasks(base_model_dir, output_dir, task_names, note="", log_file=
     output_dir: the directory where the finetuned model will be located
     """
     results = dict()
-    start_time = time.time()
     
     # Finetune on each task
     for task in task_names:
+        start_time = time.time()
+
         finetune_on_task(base_model_dir, output_dir, task)
         finetuned_model_dir = os.path.join(output_dir, task)
         score = evaluate_on_task(finetuned_model_dir, finetuned_model_dir, task)
-        results[f'finetune-accuracy-{task}'] = score
     
-    # Write results
-    results['base_model'] = base_model_dir
-    results['finetuning_time'] = time.time() - start_time
-    results['notes'] = note
-    
-    if log_file is not None:
-        write_results(log_file, results)
+        # Write results
+        results = {
+            'base_model': base_model_dir,
+            'finetuning_time': time.time() - start_time,
+            'finetune-accuracy': score,
+            'task': task,
+            'notes': note,
+        }
+        
+        if log_file is not None:
+            write_results(log_file, results)
       
 
 def acquire_lock(filename, check_interval=1):

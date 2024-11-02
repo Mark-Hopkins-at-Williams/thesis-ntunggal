@@ -6,4 +6,4 @@
 #SBATCH -o log_%j.out  
 #SBATCH -e log_%j.err
 #SBATCH --gres=gpu:1
-python thesis-ntunggal/roberta-training/finetune.py --model_dir /mnt/storage/ntunggal/baidu-model/checkpoint-56263 --output_dir finetuned-baidu-logged --tasks tnews,iflytek,cluewsc2020,afqmc,csl,ocnli --note "rerun baidu finetune with logs" --log_file baidu-finetuning.log
+python thesis-ntunggal/roberta-training/train_roberta.py --data_dir /mnt/storage/ntunggal/baidubaike_small.txt --output_dir test-small-baidu-pretrain --note "test pretraining on small baidu" --log_file test-baidu-small-pretrain.csv
