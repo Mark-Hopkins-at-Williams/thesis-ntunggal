@@ -9,13 +9,15 @@ from transformers import (
     RobertaConfig,
     EarlyStoppingCallback
 )
+from torch.utils.data import DataLoader
+from torch.nn.utils.rnn import pad_sequence
 import os
 import json
 import time
 import random
 import argparse
-import shutil
-from finetune import write_results
+import utils
+from metrics import compute_bits_per_byte
 
 
 VOCAB_SIZE = 52_000
@@ -67,6 +69,13 @@ def split_data(text_file, train_file, val_file, split_ratio=TRAIN_SPLIT_RATIO):
         f.writelines(lines[split_idx:])
 
 
+def collate_fn(batch):
+    input_ids = pad_sequence([item['input_ids'] for item in batch], batch_first=True, padding_value=tokenizer.pad_token_id)
+    attention_masks = pad_sequence([item['attention_mask'] for item in batch], batch_first=True, padding_value=0)
+
+    return {'input_ids': input_ids, 'attention_mask': attention_masks}
+
+
 def train_roberta(tokenizer, data_dir, output_dir, note, log_file):
     """
     Trains a roberta model. Currently hard-coded to use a byte-level
@@ -99,16 +108,18 @@ def train_roberta(tokenizer, data_dir, output_dir, note, log_file):
     model = RobertaForMaskedLM(config=config)
 
     # Load training and validation datasets
-    train_dataset = LineByLineTextDataset(
+    train_dataset = utils.CustomLineByLineTextDataset(
         tokenizer=tokenizer,
         file_path=train_file,
         block_size=128,
     )
-    val_dataset = LineByLineTextDataset(
+    val_dataset = utils.CustomLineByLineTextDataset(
         tokenizer=tokenizer,
         file_path=val_file,
         block_size=128,
     )
+
+    val_loader = DataLoader(val_dataset, batch_size=64, collate_fn=collate_fn)
 
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer, mlm=True, mlm_probability=0.15
@@ -121,8 +132,8 @@ def train_roberta(tokenizer, data_dir, output_dir, note, log_file):
         per_device_train_batch_size=64,
         save_strategy="steps",
         eval_strategy="steps",
-        eval_steps=50,
-        save_steps=50,
+        eval_steps=150,
+        save_steps=150,
         prediction_loss_only=True,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
@@ -150,13 +161,11 @@ def train_roberta(tokenizer, data_dir, output_dir, note, log_file):
     tokenizer.save_pretrained(output_dir)
 
     # Remove checkpoint folders
-    for filename in os.listdir(output_dir):
-        file_path = os.path.join(output_dir, filename)
-        if os.path.isdir(file_path) and filename.startswith("checkpoint-"):
-            shutil.rmtree(file_path)
+    utils.clean_checkpoint_folders(output_dir)
 
     # Evaluate
     eval_results = trainer.evaluate()
+    bits_per_byte = compute_bits_per_byte(model, tokenizer, val_loader, device=training_args.device)
 
     # Write results to csv
     results = {
@@ -164,6 +173,7 @@ def train_roberta(tokenizer, data_dir, output_dir, note, log_file):
         'tokenizer': tokenizer,
         'dataset': data_dir,
         'validation_loss': eval_results['eval_loss'],
+        'bits per byte': bits_per_byte,
         'max_pos_embeddings': max_pos_embeddings,
         'num_attention_heads': num_attn_heads,
         'num_hidden_layers': num_hidden_layers,
@@ -172,7 +182,7 @@ def train_roberta(tokenizer, data_dir, output_dir, note, log_file):
     }
 
     if log_file is not None:
-        write_results(log_file, results)
+        utils.write_results(log_file, results)
     
     
 if __name__ == "__main__":

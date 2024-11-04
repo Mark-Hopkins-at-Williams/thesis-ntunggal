@@ -3,18 +3,21 @@ Finetune a pre-trained model on one of the CLUE benchmarks.
 This file takes in three arguments: the model directory, output directory, and benchmark
 Current benchmarks available are: tnews, iflytek, cluewsc2020, afqmc, csl, ocnli
 """
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+    Trainer,
+    TrainingArguments,
+)
 from datasets import load_dataset
 import evaluate
-from transformers import Trainer, TrainingArguments
 import numpy as np
 import argparse
 import time
-from evaluate_clue import tokenize_dataset, evaluate_on_task
-from pathlib import Path
 import os
-import csv
 import shutil
+from evaluate_clue import tokenize_dataset, evaluate_on_task
+import utils
 
 TASK_CONFIGS = {
     "tnews": {
@@ -100,10 +103,7 @@ def finetune(tokenized_dataset, model_dir, output_dir, num_labels, tokenizer, ta
     tokenizer.save_pretrained(model_save_path)
 
     # Remove checkpoint folders
-    for filename in os.listdir(output_dir):
-        file_path = os.path.join(output_dir, filename)
-        if os.path.isdir(file_path) and filename.startswith("checkpoint-"):
-            shutil.rmtree(file_path)
+    utils.clean_checkpoint_folders(output_dir)
 
 
 def finetune_on_task(model_dir, output_dir, task_name):
@@ -151,45 +151,7 @@ def finetune_on_tasks(base_model_dir, output_dir, task_names, note="", log_file=
         }
         
         if log_file is not None:
-            write_results(log_file, results)
-      
-
-def acquire_lock(filename, check_interval=1):
-    lock_file = filename + ".lock"
-    print(f"waiting to acquire lock for {filename}...")
-    while os.path.exists(lock_file):
-        time.sleep(check_interval)
-    print('...acquired!')
-    file_path = Path(lock_file)
-    file_path.touch()
-    
-
-def release_lock(filename):
-    lock_file = filename + ".lock"
-    if os.path.exists(lock_file):
-        os.remove(lock_file)
-    print(f'lock released on: {filename}')
-    
-
-def write_results(filename, results):    
-    data = [results[key] for key in sorted(results.keys())]  
-    headers = sorted(results.keys())
-    
-    try:
-        acquire_lock(filename)
-        # If log file doesn't exist, write the headers
-        if not os.path.isfile(filename):
-            with open(filename, mode='a', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow(headers)
-        # Write results to csv
-        with open(filename, mode='a', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(data)
-        release_lock(filename)
-
-    except Exception:
-        release_lock(filename)
+            utils.write_results(log_file, results)
 
 
 if __name__ == "__main__":
