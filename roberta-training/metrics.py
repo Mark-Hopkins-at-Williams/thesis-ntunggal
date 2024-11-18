@@ -21,8 +21,6 @@ def compute_bits_per_byte(model, tokenizer, eval_loader, device):
             outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
             logits = outputs.logits # shape: (batch_size, sequence_length, vocab_size)
 
-            
-
             # Get log probs (cross entropy) for each token in sequence
             log_probs = cross_entropy(
                 logits.view(-1, len(tokenizer)),
@@ -30,36 +28,21 @@ def compute_bits_per_byte(model, tokenizer, eval_loader, device):
                 reduction='none'
             ).view(input_ids.size())  # Reshape to (batch_size, sequence_length)
 
-            
-
             # Divide by ln(2) to get bits per token, since cross_entropy uses ln
             # Shape: (batch_size,)
             bits_per_token = (log_probs.sum(dim=1) / input_ids.size(1)) / np.log(2)
 
-            print(bits_per_token)
+            #print(bits_per_token)
 
             # Calculate tokens per byte
             toks = []
             for ids in input_ids:
                 toks.extend([tokenizer.decode(torch.tensor([token_id]), skip_special_tokens=True) for token_id in ids])
-            print(toks)
+            #print(toks)
             
             utf8_toks = [len(tok.encode('utf-8')) for tok in toks]
             tokens_per_byte = len(utf8_toks) / sum(utf8_toks)
-            print(tokens_per_byte)
-            
-                
-            
-            #utf8_toks = [len(tok.encode('utf-8')) for tok in toks]
-            #print(utf8_toks)
-            
-            # input_lengths_bytes = torch.tensor(
-            #     [len(tokenizer.decode(ids, skip_special_tokens=True).encode('utf-8')) for ids in input_ids],
-            #     dtype=torch.float32,
-            #     device=device
-            # )
-            # tokens_per_byte = input_ids.size(1) / input_lengths_bytes
-            # print(tokens_per_byte)
+            #print(tokens_per_byte)
 
             # Add avg BPB calculation for batch
             total_bpb += (bits_per_token * tokens_per_byte).mean().item()
@@ -67,6 +50,18 @@ def compute_bits_per_byte(model, tokenizer, eval_loader, device):
 
     # Return average BPB over all batches
     return total_bpb / total_batches
+
+
+def undo_softmax(probs, dim=-1):
+    # Add a small epsilon to probabilities to prevent log(0)
+    epsilon = 1e-10
+    probs = torch.tensor(probs)
+    probs = probs.clamp(min=epsilon)
+    log_probs = torch.log(probs)
+    
+    # Shift logits to align with the original softmax outputs
+    logits = log_probs - log_probs.mean(dim=dim, keepdim=True)
+    return logits
 
 
 class SimpleTokenizer:
@@ -103,17 +98,48 @@ class UnigramLM(torch.nn.Module):
             return [get_probs(tok) for tok in token_seq]
         
         logits = torch.tensor([map_probs(tok_seq) for tok_seq in input_ids.tolist()])
+        print(logits)
         return UnigramLMOutput(logits)
+    
+    
+class BigramLM(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+            
+    def forward(self, input_ids, attention_mask, labels):
+        
+        # P(x | x_prev)
+        probs = [[0.5, 0.25, 0.125, 0.125],
+                [0.25, 0.25, 0.25, 0.25],
+                [0.5, 0.0, 0.25, 0.25],
+                [0.4, 0.2, 0.2, 0.2]]
+        probs = undo_softmax(probs)
+    
+        prev_token = None
+        logits = []
+        
+        # confused on how this is supposed to work
+        for tok_seq in input_ids.tolist():
+            for tok in tok_seq:
+                if prev_token == None:
+                    prev_token = '<s>'
+                
+                tok_probs = probs[tok] # list
+                logits.append(tok_probs)
+                prev_token = tok
+            
+        return UnigramLMOutput(logits)
+
 
 EXAMPLE = torch.tensor([[0, 0, 1, 2]])
 EXAMPLE1 = torch.tensor([[0, 1, 0, 1, 2, 0, 0, 3],
-                                      [0, 1, 0, 1, 2, 0, 3, 0]])
+                         [0, 1, 0, 1, 2, 0, 3, 0]])
 
 def my_eval_loader():
     yield {'input_ids': EXAMPLE}
 
 if __name__ == "__main__":
-    input_ids = EXAMPLE
+    input_ids = EXAMPLE1
     labels = input_ids.clone()
     attention_mask = torch.ones((2, 8))
     model = UnigramLM()
