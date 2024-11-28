@@ -6,4 +6,4 @@
 #SBATCH -o log_%j.out  
 #SBATCH -e log_%j.err
 #SBATCH --gres=gpu:1
-python thesis-ntunggal/roberta-training/train_roberta.py --data_dir /mnt/storage/ntunggal/baidubaike_small.txt --output_dir test-pretrain-bpb --note "testing bits per byte metric" --log_file test-pretrain-bpb.csv
+python thesis-ntunggal/roberta-training/train_roberta.py --data_dir /mnt/storage/ntunggal/baidubaike_small.txt --output_dir test-custom-tokenizer --note "testing custom char tokenizer" --log_file test-char-tokenizer.csv

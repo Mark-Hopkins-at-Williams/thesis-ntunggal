@@ -18,6 +18,7 @@ import random
 import argparse
 import utils
 from metrics import compute_bits_per_byte
+from char_tokenizer import CustomCharacterTokenizer
 
 
 VOCAB_SIZE = 52_000
@@ -26,7 +27,8 @@ TRAIN_SPLIT_RATIO = 0.9
 
 
 def train_byte_level_tokenizer(text_file, model_dir):
-    tokenizer = ByteLevelBPETokenizer()
+    #tokenizer = ByteLevelBPETokenizer()
+    tokenizer = CustomCharacterTokenizer()
     tokenizer.train(files=[text_file], vocab_size=VOCAB_SIZE, min_frequency=2, special_tokens=[
         "<s>", "<pad>", "</s>", "<unk>", "<mask>",
     ])
@@ -47,7 +49,8 @@ def train_byte_level_tokenizer(text_file, model_dir):
     with open(os.path.join(model_dir, "tokenizer_config.json"), "w") as f:
         json.dump(tokenizer_config, f)
 
-    tokenizer = RobertaTokenizer.from_pretrained(model_dir)
+    #tokenizer = RobertaTokenizer.from_pretrained(model_dir)
+    tokenizer = CustomCharacterTokenizer.from_pretrained(model_dir)
     return tokenizer
 
 
