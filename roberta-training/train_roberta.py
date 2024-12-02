@@ -106,6 +106,7 @@ def train_roberta(tokenizer, data_dir, output_dir, note, log_file):
         num_attention_heads=num_attn_heads,
         num_hidden_layers=num_hidden_layers,
         type_vocab_size=1,
+        pad_token_id=tokenizer.pad_token_id, # needs to be manually specified
     )
 
     model = RobertaForMaskedLM(config=config)

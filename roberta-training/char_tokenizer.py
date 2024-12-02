@@ -59,12 +59,13 @@ class CustomCharacterTokenizer(PreTrainedTokenizer):
                 self.special_tokens["bos_token"] = token
             self.vocab[token] = i
 
-        # Set vocabulary
+        # Set rest of vocabulary
         char_set_list = list(char_set)
         for i in range(len(special_tokens), min(len(char_set), vocab_size)):
             self.vocab[char_set_list[i]] = i
 
         self.ids_to_tokens = {id: token for token, id in self.vocab.items()}
+        print(self.vocab)
     
     def tokenize(self, text: str) -> List:
         """Tokenize using individual characters."""

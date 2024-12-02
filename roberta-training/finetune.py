@@ -117,7 +117,7 @@ def finetune_on_task(model_dir, output_dir, task_name):
         raise ValueError(f"Unknown task '{task_name}'.")
 
     task_config = TASK_CONFIGS[task_name]
-    dataset = dataset = load_dataset(*task_config["dataset"])
+    dataset = load_dataset(*task_config["dataset"])
     tokenized_dataset = tokenize_dataset(dataset, tokenizer, task_config["task_type"])
     num_labels = task_config["num_labels"]
 
