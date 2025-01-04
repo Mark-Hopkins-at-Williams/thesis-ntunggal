@@ -1,4 +1,5 @@
 .DS_Store
 *.pdf
 __pycache__
-gpt-training/experiments
+checkpoints/
+logs/

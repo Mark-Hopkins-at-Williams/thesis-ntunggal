@@ -5,5 +5,5 @@
 #SBATCH --mem=10G           
 #SBATCH -o log_%j.out  
 #SBATCH -e log_%j.err
-#SBATCH --gres=gpu:4
-python train_gpt.py
+#SBATCH --gres=gpu:1
+CUDA_VISIBLE_DEVICES=3 python train_gpt.py experiments/model_trial1
