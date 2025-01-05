@@ -1,0 +1,19 @@
+{
+    "model": {
+        "n_positions": 1024,
+        "n_ctx": 1024,
+        "n_embd": 768,
+        "n_layer": 6,
+        "n_head": 12,
+        "activation_function": "gelu"
+    },
+    "training": {
+        "eval_steps": 1000,
+        "max_steps": 20000,
+        "batch_size": 16,
+        "learning_rate": 5e-5,
+        "weight_decay": 0.01,
+        "warmup_steps": 500,
+        "max_grad_norm": 1
+    }
+}

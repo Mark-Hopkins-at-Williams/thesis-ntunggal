@@ -6,4 +6,4 @@
 #SBATCH -o log_%j.out  
 #SBATCH -e log_%j.err
 #SBATCH --gres=gpu:1
-python train_roberta.py --data_dir /mnt/storage/hopkins/data/chinese-monolingual/baidubaike/ --output_dir roberta-baidu --note "test pretraining on baidu" --log_file roberta-baidu.csv
+CUDA_VISIBLE_DEVICES=3 python train_gpt.py experiments/model_trial1
