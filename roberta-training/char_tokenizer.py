@@ -3,8 +3,9 @@ Custom character-level tokenizer.
 """
 import os
 import json
-from transformers import PreTrainedTokenizer
+from transformers import PreTrainedTokenizer, AutoTokenizer
 from typing import Dict, List
+from train_roberta import train_byte_level_tokenizer
 
 class CustomCharacterTokenizer(PreTrainedTokenizer):
     
@@ -34,7 +35,7 @@ class CustomCharacterTokenizer(PreTrainedTokenizer):
         for file in files:
             with open(file) as f:
                 for line in f:
-                    char_set.update(set(self.tokenize(line)))
+                    char_set.update(set(list(line)))
                     if len(char_set) > vocab_size:
                         break
                 else:
@@ -68,8 +69,8 @@ class CustomCharacterTokenizer(PreTrainedTokenizer):
         print(self.vocab)
     
     def tokenize(self, text: str) -> List:
-        """Tokenize using individual characters."""
-        return list(text)
+        """Tokenize using characters in vocab."""
+        return [char if char in self.vocab else self.special_tokens['unk_token'] for char in text]
     
     def convert_tokens_to_ids(self, tokens: List) -> List:
         """Convert characters (tokens) to IDs."""
@@ -132,7 +133,8 @@ if __name__ == "__main__":
         "<s>", "<pad>", "</s>", "<unk>", "<mask>",
     ])
 
-    print(f"tokenizer: {tokenizer}")
+    bpe_tokenizer = train_byte_level_tokenizer(corpus, "/mnt/storage/ntunggal/delete_me")
 
-    vocab = tokenizer.get_vocab()
-    print(vocab)
+    test_str = "this is chinese: 你好。"
+    print(tokenizer.tokenize(test_str))
+    print(bpe_tokenizer.tokenize(test_str))

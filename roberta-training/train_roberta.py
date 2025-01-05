@@ -1,3 +1,12 @@
+"""
+Pretrains a RoBERTa model given a dataset txt file.
+
+Arguments:
+--data_dir: Directory of txt file dataset.
+--output_dir: Directory where model is to be saved.
+--note: Notes about the experiment (optional)
+--log_file: name of file to write logs to (name includes .csv)
+"""
 from tokenizers import ByteLevelBPETokenizer
 from transformers import (
     RobertaTokenizer,
@@ -18,7 +27,7 @@ import random
 import argparse
 import utils
 from metrics import compute_bits_per_byte
-from char_tokenizer import CustomCharacterTokenizer
+#from char_tokenizer import CustomCharacterTokenizer
 
 
 VOCAB_SIZE = 52_000
@@ -27,8 +36,8 @@ TRAIN_SPLIT_RATIO = 0.9
 
 
 def train_byte_level_tokenizer(text_file, model_dir):
-    #tokenizer = ByteLevelBPETokenizer()
-    tokenizer = CustomCharacterTokenizer()
+    tokenizer = ByteLevelBPETokenizer()
+    #tokenizer = CustomCharacterTokenizer()
     tokenizer.train(files=[text_file], vocab_size=VOCAB_SIZE, min_frequency=2, special_tokens=[
         "<s>", "<pad>", "</s>", "<unk>", "<mask>",
     ])
@@ -49,8 +58,8 @@ def train_byte_level_tokenizer(text_file, model_dir):
     with open(os.path.join(model_dir, "tokenizer_config.json"), "w") as f:
         json.dump(tokenizer_config, f)
 
-    #tokenizer = RobertaTokenizer.from_pretrained(model_dir)
-    tokenizer = CustomCharacterTokenizer.from_pretrained(model_dir)
+    tokenizer = RobertaTokenizer.from_pretrained(model_dir)
+    #tokenizer = CustomCharacterTokenizer.from_pretrained(model_dir)
     return tokenizer
 
 
@@ -136,8 +145,8 @@ def train_roberta(tokenizer, data_dir, output_dir, note, log_file):
         per_device_train_batch_size=64,
         save_strategy="steps",
         eval_strategy="steps",
-        eval_steps=150,
-        save_steps=150,
+        eval_steps=2500,
+        save_steps=2500,
         prediction_loss_only=True,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
@@ -177,7 +186,7 @@ def train_roberta(tokenizer, data_dir, output_dir, note, log_file):
         'tokenizer': tokenizer,
         'dataset': data_dir,
         'validation_loss': eval_results['eval_loss'],
-        'bits per byte': bits_per_byte,
+        'bits_per_byte': bits_per_byte,
         'max_pos_embeddings': max_pos_embeddings,
         'num_attention_heads': num_attn_heads,
         'num_hidden_layers': num_hidden_layers,

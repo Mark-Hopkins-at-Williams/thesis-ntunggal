@@ -1,14 +1,20 @@
 """
-Evaluate a trained model on CLUE benchmarks.
-This file takes in three arguments: model path, tokenizer path, and the task to evaluate on
-Available tasks are as follows: tnews, iflytek, cluewsc2020, afqmc, csl, ocnli
+Evaluate a (finetuned) model on a single CLUE benchmark.
+
+Arguments:
+--model_dir: Directory of base model.
+--tokenizer_dir: Directory of tokenizer (may need to use HuggingFace path).
+--task: A CLUE benchmark to evaluate on (one of: tnews, iflytek, cluewsc2020, afqmc, csl, ocnli)
+--note: Notes about the experiment (optional)
+--log_file: name of file to write logs to (name includes .csv)
 """
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from datasets import load_dataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import sys
+import argparse
+import utils
 
 
 def tokenize_dataset(dataset, tokenizer, task_type: str):
@@ -36,7 +42,7 @@ def tokenize_dataset(dataset, tokenizer, task_type: str):
     return dataset.map(tokenize_function, batched=True)
 
 
-def evaluate_on_task(model_path, tokenizer_path, task_name):
+def evaluate_on_task(model_path, tokenizer_path, task_name, note="", log_file=None):
     """
     Evaluates the model on the given task.
     """
@@ -100,13 +106,30 @@ def evaluate_on_task(model_path, tokenizer_path, task_name):
     # Run evaluation
     accuracy = evaluate(model, test_dataloader)
     print(f"Accuracy on {task_name} validation set: {accuracy}")
+
+    # Log results
+    results = {
+        'base_model_path': model_path,
+        'tokenizer_path': tokenizer_path,
+        'accuracy': accuracy,
+        'task': task_name,
+        'notes': note,
+    }
+    
+    if log_file is not None:
+        utils.write_results(log_file, results)
+
     return accuracy
 
 
 if __name__ == "__main__":
-    model_path = sys.argv[1]
-    tokenizer_path = sys.argv[2]
-    task = sys.argv[3]
+    parser = argparse.ArgumentParser(description="Evaluate a model on a single CLUE benchmark.")
+    parser.add_argument("--model_dir", type=str, required=True, help="Directory where the base model is located.")
+    parser.add_argument("--tokenizer_dir", type=str, required=True, help="Directory where tokenizer is located.")
+    parser.add_argument("--task", type=str, required=True, help="Benchmark or task to evaluate on.")
+    parser.add_argument("--note", type=str, help="Notes about experiment (optional)")
+    parser.add_argument("--log_file", type=str, required=True, help="Logging file for experiment results.")
+    args = parser.parse_args()
 
-    evaluate_on_task(model_path, tokenizer_path, task)
+    evaluate_on_task(args.model_dir, args.tokenizer_dir, args.task, args.note, args.log_file)
     

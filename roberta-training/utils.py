@@ -1,5 +1,8 @@
 """
-Contains useful functions.
+Contains useful utility functions:
+- write_results: write a results dict to a csv file
+- clean_checkpoint_folders: delete checkpoint folders in a directory
+- CustomLineByLineTextDataset
 """
 import time
 from pathlib import Path
@@ -27,7 +30,7 @@ def release_lock(filename):
 
 def write_results(filename: str, results: dict) -> None:    
     """
-    Writes results to a csv file. filename should be a .csv
+    Writes results to a csv file. filename should include .csv
     """
     data = [results[key] for key in sorted(results.keys())]  
     headers = sorted(results.keys())

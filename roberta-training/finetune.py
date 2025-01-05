@@ -1,7 +1,12 @@
 """
-Finetune a pre-trained model on one of the CLUE benchmarks.
-This file takes in three arguments: the model directory, output directory, and benchmark
-Current benchmarks available are: tnews, iflytek, cluewsc2020, afqmc, csl, ocnli
+Finetune a base model on CLUE benchmarks.
+
+Arguments:
+--model_dir: Directory of base model.
+--output_dir: Directory to put the finetuned model(s).
+--tasks: Tasks to finetune on, comma separated (options: tnews, iflytek, cluewsc2020, afqmc, csl, ocnli)
+--note: Notes about the experiment (optional)
+--log_file: name of file to write logs to (name includes .csv)
 """
 from transformers import (
     AutoTokenizer,
@@ -141,11 +146,11 @@ def finetune_on_tasks(base_model_dir, output_dir, task_names, note="", log_file=
         finetuned_model_dir = os.path.join(output_dir, task)
         score = evaluate_on_task(finetuned_model_dir, finetuned_model_dir, task)
     
-        # Write results
+        # Log results
         results = {
-            'base_model': base_model_dir,
-            'finetuning_time': time.time() - start_time,
-            'finetune-accuracy': score,
+            'base_model_path': base_model_dir,
+            'time': time.time() - start_time,
+            'accuracy': score,
             'task': task,
             'notes': note,
         }
