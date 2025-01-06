@@ -43,7 +43,6 @@ class CustomCharacterTokenizer(PreTrainedTokenizer):
                 break
         
         # Add special tokens to vocabulary
-        # Manually coded for now
         for i, token in enumerate(special_tokens):
             if token == "<s>":
                 self.special_tokens["bos_token"] = token
