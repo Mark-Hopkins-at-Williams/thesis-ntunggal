@@ -67,7 +67,7 @@ for line in tokenized_validation:
     num_validation_tokens += sum(line['attention_mask'])
 print(f'num tokens: {num_validation_tokens}')
 
-
+print("Preparing to train...")
 entropy_ratios = []
 
 class CustomTrainer(Trainer):
@@ -107,10 +107,14 @@ trainer = CustomTrainer(
     eval_dataset=tokenized_validation,  
     tokenizer=tokenizer.tokenizer,             
 )
+print("Everything set up, about to train...")
 trainer.train()
+print("Training complete, logging ratios...")
 
 with open(join(experiment_dir, 'ratios.txt'), 'w') as writer:
     steps_so_far = training_config['eval_steps']
     for ratio in entropy_ratios:
         writer.write(f'{steps_so_far},{ratio}\n')
         steps_so_far += training_config['eval_steps']
+
+print("All done")

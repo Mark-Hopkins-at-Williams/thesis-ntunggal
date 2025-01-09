@@ -96,11 +96,19 @@ class CharacterTokenizer(PreTrainedTokenizer):
 
     def tokenize(self, texts: list[str]) -> dict:
         """Tokenize a batch of texts using characters in vocab."""
-        batch_tokens = [
-            [char if char in self.vocab else self.special_tokens['unk_token'] for char in text]
-            for text in texts
-        ]
-        return {"tokens": batch_tokens}
+        
+        if isinstance(texts, str):
+            return [self.vocab.get(char, self.special_tokens["unk_token"]) for char in text]
+        
+        input_ids = []
+        attention_mask = []
+
+        for text in texts:
+            ids = [self.vocab.get(char, self.special_tokens["unk_token"]) for char in text]
+            input_ids.append(ids)
+            attention_mask.append([1 * len(ids)])
+            
+        return {"input_ids": input_ids, "attention_mask": attention_mask}
     
     def convert_tokens_to_ids(self, tokens: list) -> list:
         """Convert characters (tokens) to IDs."""

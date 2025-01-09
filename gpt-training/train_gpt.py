@@ -22,9 +22,9 @@ logging_dir = join(experiment_dir, "logs")
 os.makedirs(checkpoints_dir, exist_ok=True)
 os.makedirs(logging_dir, exist_ok=True)
 
-
+#50257
 config = GPT2Config(
-    vocab_size=50257,        # Vocabulary size (this is the default for GPT-2)
+    vocab_size=512,        # Vocabulary size (this is the default for GPT-2)
     n_positions=model_config['n_positions'],    # Maximum length of input sequences (in tokens)
     n_ctx=model_config['n_ctx'],                # Context size (same as n_positions)
     n_embd=model_config['n_embd'],              # Embedding dimension size
@@ -38,6 +38,7 @@ config = GPT2Config(
 
 model = GPT2LMHeadModel(config)
 train_dataset, validation_dataset, entropy = load_baai_data()
+print("Data loaded, tokenizing now...")
 
 # Tokenize the datasets
 tokenizer = DefaultGPT2Tokenizer(config.n_positions)
@@ -45,11 +46,12 @@ config.pad_token_id = tokenizer.pad_token_id  # Sync the pad_token_id
 model.resize_token_embeddings(len(tokenizer))  # Adjust model embeddings
 tokenized_train = train_dataset.map(tokenizer.tokenize, batched=True, remove_columns=["text"])
 tokenized_validation = validation_dataset.map(tokenizer.tokenize, batched=True, remove_columns=["text"])
-
+print(f"tokenized_validation: {tokenized_validation}")
 
 num_validation_tokens = 0
 for line in tokenized_validation:
     #print(sum(line['attention_mask']))
+    print(f"attention mask for line {line}: {line['attention_mask']}")
     num_validation_tokens += sum(line['attention_mask'])
 print(f'num tokens: {num_validation_tokens}')
 
