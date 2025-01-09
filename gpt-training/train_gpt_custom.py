@@ -105,7 +105,7 @@ trainer = CustomTrainer(
     args=training_args,                 
     train_dataset=tokenized_train,      
     eval_dataset=tokenized_validation,  
-    tokenizer=tokenizer.tokenizer,             
+    tokenizer=tokenizer             
 )
 print("Everything set up, about to train...")
 trainer.train()

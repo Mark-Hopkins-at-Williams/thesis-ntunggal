@@ -30,3 +30,5 @@ def load_baai_data():
     validation_dataset = Dataset.from_dict({"text": [item for item in subset]})
     return train_dataset, validation_dataset, validation_entropy
 
+if __name__ == "__main__":
+    load_baai_data()
