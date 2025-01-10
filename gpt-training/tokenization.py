@@ -1,8 +1,16 @@
-from transformers import GPT2TokenizerFast
-from transformers import PreTrainedTokenizer
 import os
 import json
+from collections import Counter
+from typing import Optional, Tuple
+from transformers import GPT2TokenizerFast
+from transformers import AddedToken, PreTrainedTokenizer, logging
 
+logger = logging.get_logger(__name__)
+
+VOCAB_FILES_NAMES = {
+    "vocab_file": "vocab.json",
+    "merges_file": "merges.txt",
+}
 
 class DefaultGPT2Tokenizer:
 
@@ -27,135 +35,154 @@ class DefaultGPT2Tokenizer:
 
 
 class CharacterTokenizer(PreTrainedTokenizer):
-    
-    def __init__(self, n_positions, **kwargs):
-        self.vocab: dict[str, int] = dict() # map token to id
-        super().__init__(**kwargs)        
-        self.ids_to_tokens: dict[int, str] | None = {id: token for token, id in self.vocab.items()} if self.vocab is not None else None
-        self.special_tokens: dict[str: str | None] = {
-            'bos_token': None,
-            'eos_token': None,
-            'unk_token': None,
-            'sep_token': None,
-            'pad_token': None,
-            'cls_token': None,
-            'mask_token': None,
-        }
-        self.pad_token_id1: int = None
-        self.bos_token_id1: int = None
-        self.eos_token_id1: int = None
-        self.n_positions: int = n_positions
+    """
+    Construct a character-level tokenizer.
 
-    def train(self, data, vocab_size: int, min_frequency: int, special_tokens: list[str], text_field="text"):
-        """
-        Initializes vocabulary.
+    Args:
+        n_positions (`int`):
+            Maximum length of input sequences (in tokens).
+        max_vocab_size (`int`):
+            Upper limit of vocabulary size.
+        vocab_file (`str`):
+            Path to the vocabulary file.
+        train_file (`str`):
+            Path to training data file.
+        errors (`str`, *optional*, defaults to `"replace"`):
+            Paradigm to follow when decoding bytes to UTF-8. See
+            [bytes.decode](https://docs.python.org/3/library/stdtypes.html#bytes.decode) for more information.
+        unk_token (`str`, *optional*, defaults to `"<|endoftext|>"`):
+            The unknown token. A token that is not in the vocabulary cannot be converted to an ID and is set to be this
+            token instead.
+        bos_token (`str`, *optional*, defaults to `"<|endoftext|>"`):
+            The beginning of sequence token.
+        eos_token (`str`, *optional*, defaults to `"<|endoftext|>"`):
+            The end of sequence token.
+        pad_token (`str`, *optional*):
+            The token used for padding, for example when batching sequences of different lengths.
+        add_bos_token (`bool`, *optional*, defaults to `False`):
+            Whether or not to add an initial beginning of sentence token to the input. This allows to treat the leading
+            word just as any other word.
+    """
+    
+    def __init__(
+        self,
+        n_positions,
+        max_vocab_size=None,
+        vocab_file=None,
+        train_file=None,
+        errors="replace",
+        unk_token="<|endoftext|>",
+        bos_token="<|endoftext|>",
+        eos_token="<|endoftext|>",
+        pad_token=None,
+        add_bos_token=False,
+        **kwargs,
+    ):
+        bos_token = AddedToken(bos_token, lstrip=False, rstrip=False) if isinstance(bos_token, str) else bos_token
+        eos_token = AddedToken(eos_token, lstrip=False, rstrip=False) if isinstance(eos_token, str) else eos_token
+        unk_token = AddedToken(unk_token, lstrip=False, rstrip=False) if isinstance(unk_token, str) else unk_token
+        pad_token = AddedToken(pad_token, lstrip=False, rstrip=False) if isinstance(pad_token, str) else pad_token
+
+        self.add_bos_token = add_bos_token
         
-        Args:
-            data: Dataset object containing text to train
-            vocab_size: max vocab size
-            min_frequency: the number of times a pair should appear in order to be merged
-            special_tokens: list of special tokens
-            text_field: field name of Dataset containing the text to train
-        """
-        # Get characters
-        char_set = set()
-        for sample in data:
-            assert text_field in sample
-            text = sample.get(text_field, "")
-            char_set.update(set(text))
-            if len(char_set) > vocab_size:
-                break
-                
-        # Ensure vocab does not exceed vocab_size
-        char_set = list(char_set)[:vocab_size - len(special_tokens)]
+        self.n_positions = n_positions
+        self.max_vocab_size = max_vocab_size
 
-        # Add special tokens to vocabulary
-        for i, token in enumerate(special_tokens):
-            if token == "<s>":
-                self.special_tokens["bos_token"] = token
-                self.special_tokens["cls_token"] = token
-                self.bos_token_id1 = i
-            elif token == "<pad>":
-                self.special_tokens["pad_token"] = token
-                self.pad_token_id1 = i
-            elif token == "</s>":
-                self.special_tokens["sep_token"] = token
-                self.special_tokens["eos_token"] = token
-                self.eos_token_id1 = i
-            elif token == "<unk>":
-                self.special_tokens["unk_token"] = token
-            elif token == "<mask>":
-                self.special_tokens["bos_token"] = token
-            self.vocab[token] = i
-
-        # Set rest of vocabulary
-        for i, token in enumerate(char_set, start=len(special_tokens)):
-            self.vocab[token] = i
-
-        self.ids_to_tokens = {id: token for token, id in self.vocab.items()}
-
-    def tokenize(self, texts: list[str]) -> dict:
-        """Tokenize a batch of texts using characters in vocab."""
+        # Load vocab if it exists, otherwise train tokenizer
+        if vocab_file is not None:
+            print("Loading vocab...", flush=True)
+            with open(vocab_file, encoding="utf-8") as vocab_handle:
+                self.encoder = json.load(vocab_handle)
+        elif train_file is not None:
+            print("Training vocab...", flush=True)
+            self.encoder = self._train(train_file, max_vocab_size)
+        else:
+            raise ValueError("CharacterTokenizer needs a vocab file or train file.")
         
-        if isinstance(texts, str):
-            return [self.vocab.get(char, self.special_tokens["unk_token"]) for char in text]
-        
-        input_ids = []
-        attention_mask = []
+        self.decoder = {v: k for k, v in self.encoder.items()}
+        self.errors = errors  # how to handle errors in decoding
+        self.cache = {}
 
-        for text in texts:
-            ids = [self.vocab.get(char, self.special_tokens["unk_token"]) for char in text]
-            input_ids.append(ids)
-            attention_mask.append([1 * len(ids)])
-            
-        return {"input_ids": input_ids, "attention_mask": attention_mask}
-    
-    def convert_tokens_to_ids(self, tokens: list) -> list:
-        """Convert characters (tokens) to IDs."""
-        return [self.vocab.get(token, self.vocab["<unk>"]) for token in tokens]
-    
-    def convert_ids_to_tokens(self, ids):
-        """Convert IDs back to characters."""
-        if isinstance(ids, int):  # Handle single integer ID
-            return self.ids_to_tokens.get(ids, "<unk>")
-        return [self.ids_to_tokens.get(id, "<unk>") for id in ids]
-    
-    def save_pretrained(self, save_directory):
-        """Save the vocabulary and configuration."""
-        if not os.path.exists(save_directory):
-            os.makedirs(save_directory)
-        # Save the vocabulary
-        with open(os.path.join(save_directory, "vocab.json"), "w") as f:
-            json.dump(self.vocab, f)
-        # Save the tokenizer configuration
-        tokenizer_config = {"max_len": 512}
-        with open(os.path.join(save_directory, "tokenizer_config.json"), "w") as f:
-            json.dump(tokenizer_config, f)
+        super().__init__(
+            errors=errors,
+            unk_token=unk_token,
+            bos_token=bos_token,
+            eos_token=eos_token,
+            pad_token=pad_token,
+            **kwargs,
+        )
+        print("CharacterTokenizer init finished.", flush=True)
 
-    def save_model(self, save_directory):
-        self.save_pretrained(save_directory)
-    
-    @classmethod
-    def from_pretrained(cls, pretrained_model_name_or_path, *inputs, **kwargs):
-        """Load vocabulary and configuration from a directory."""
-        with open(os.path.join(pretrained_model_name_or_path, "vocab.json"), "r") as f:
-            vocab = json.load(f)
-        return cls(vocab, *inputs, **kwargs)
-    
-    def build_inputs_with_special_tokens(self, token_ids):
-        """Add special tokens to a sequence."""
-        return [self.vocab["<s>"]] + token_ids + [self.vocab["</s>"]]
-    
+    @property
+    def vocab_size(self):
+        return len(self.encoder)
+
     def get_vocab(self):
-        """Return the vocabulary dictionary."""
-        return self.vocab
+        return dict(self.encoder, **self.added_tokens_encoder)
     
-    def __len__(self):
-        return len(self.vocab) if self.vocab is not None else 0
+    def _train(self, dataset, max_vocab_size=None, text_field="text"):
+        print("_train method called...", flush=True)
+        char_counter = Counter()
+        for example in dataset:
+            text = example[text_field]
+            char_counter.update(text)
+
+        # Assign IDs to special tokens
+        current_id = 0
+        for token in self.special_tokens_map:
+            self.encoder[token] = current_id
+            self.decoder[current_id] = token
+            current_id += 1
+
+        # Assign IDs to characters
+        for char, _ in char_counter.most_common(max_vocab_size):
+            if char not in self.encoder:
+                self.encoder[char] = current_id
+                self.decoder[current_id] = char
+                current_id += 1
+        print(f"_train method finished. vocab size: {len(self.encoder)}", flush=True)
+
+    def _tokenize(self, text):
+        """Tokenize a string."""
+        return [char if char in self.encoder else self.unk_token for char in text]
+
+    def _convert_token_to_id(self, token):
+        """Converts a token (str) in an id using the vocab."""
+        return self.encoder.get(token, self.encoder.get(self.unk_token))
+
+    def _convert_id_to_token(self, index):
+        """Converts an index (integer) in a token (str) using the vocab."""
+        return self.decoder.get(index)
     
-    def __str__(self):
-        info = {
-            'tokenizer': 'CustomCharacterTokenizer',
-            'vocab_size': len(self.vocab),
-        }
-        return str(info)
+    def build_inputs_with_special_tokens(self, token_ids_0, token_ids_1=None):
+        if self.add_bos_token:
+            bos_token_ids = [self.bos_token_id]
+        else:
+            bos_token_ids = []
+
+        output = bos_token_ids + token_ids_0
+
+        if token_ids_1 is None:
+            return output
+
+        return output + bos_token_ids + token_ids_1
+
+    def save_vocabulary(self, save_directory: str, filename_prefix: Optional[str] = None) -> Tuple[str]:
+        if not os.path.isdir(save_directory):
+            logger.error(f"Vocabulary path ({save_directory}) should be a directory")
+            return
+        
+        vocab_file = os.path.join(
+            save_directory, (filename_prefix + "-" if filename_prefix else "") + VOCAB_FILES_NAMES["vocab_file"]
+        )
+
+        with open(vocab_file, "w", encoding="utf-8") as f:
+            f.write(json.dumps(self.encoder, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+
+        return (vocab_file,)
+    
+    # def __call__(self, text, **kwargs):
+    #     tokens = self.tokenize(text)
+    #     token_ids = self.convert_tokens_to_ids(tokens)
+    #     attention_mask = [1] * len(token_ids)
+    #     return {"input_ids": token_ids, "attention_mask": attention_mask}
