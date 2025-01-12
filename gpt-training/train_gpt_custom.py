@@ -3,13 +3,89 @@ import json
 import os
 from os.path import join
 import sys
-from tokenization import DefaultGPT2Tokenizer, CharacterTokenizer
+from collections import Counter
+import matplotlib.pyplot as plt
+from tokenization import CharacterTokenizer
 from transformers import Trainer, TrainingArguments
 from transformers import Trainer
 from transformers import GPT2Config
 from transformers import GPT2LMHeadModel
 from transformers import TrainingArguments, Trainer
 
+VOCAB_FILEPATH = "/mnt/storage/ntunggal/thesis-ntunggal/gpt-training/char-tokenizer/vocab.json"
+SPECIAL_TOKENS = {
+    'bos_token': '<|endoftext|>', # Matches CharacterTokenizer default
+    'eos_token': '<|endoftext|>', # Matches CharacterTokenizer default
+    'unk_token': '<|endoftext|>', # Matches CharacterTokenizer default
+    'pad_token': '[PAD]',         # Custom defined
+}
+
+def view_new_char_growth(train_dataset):
+    unique_chars = Counter()
+    count = 0
+    unique_chars_growth = []
+
+    for example in train_dataset:
+        text = example['text']
+        unique_chars.update(text)
+        count += 1
+        unique_chars_growth.append(len(unique_chars))
+        if count % 500000 == 0:
+            print(f"Processed example {count}, now breaking...", flush=True)
+            break
+        elif count % 10000 == 0:
+            print(f"Processed example {count}", flush=True)
+        
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(1, count + 1), unique_chars_growth, label="Unique Characters")
+    plt.xlabel("Iteration")
+    plt.ylabel("Number of Unique Characters")
+    plt.title("Growth of Unique Characters Over Iterations")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig("unique_chars_growth_500000.png", dpi=300)
+
+    print(f"Number of distinct characters: {len(unique_chars)}")
+    print(f"Number of examples: {count}")
+    print(f"100 most common characters: {unique_chars.most_common(100)}")
+
+def create_vocab(train_dataset, file_path, special_tokens=[], text_field="text"):
+    """
+    Creates a vocab.json file from a given training dataset.
+
+    Args:
+        train_dataset: Dataset from which to create vocab from.
+        file_path: path of vocab.json file to create.
+        special_tokens: list of special tokens.
+        text_field: the column header of the dataset containing text to train on. 
+    """
+    char_counter = Counter()
+    for i, example in enumerate(train_dataset, start=1):
+        text = example[text_field]
+        char_counter.update(text)
+        # Stop at 1 million examples
+        if i >= 10:
+            break
+
+    # Add special tokens to vocab
+    vocab = {}
+    current_id = 0
+    for token in special_tokens:
+        if token not in vocab:
+            vocab[token] = current_id
+            current_id += 1
+
+    # Add regular tokens to vocab
+    for char, _ in char_counter.most_common():
+        if char not in vocab:
+            vocab[char] = current_id
+            current_id += 1
+    
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(vocab, f, indent=None, ensure_ascii=False, separators=(",", ":"))
+    return
 
 experiment_dir = sys.argv[1]
 with open(join(experiment_dir, 'experiment.json')) as reader:
@@ -22,35 +98,34 @@ logging_dir = join(experiment_dir, "logs")
 os.makedirs(checkpoints_dir, exist_ok=True)
 os.makedirs(logging_dir, exist_ok=True)
 
+print("Loading dataset...", flush=True)
+train_dataset, validation_dataset, entropy = load_baai_data()
+if not os.path.exists(VOCAB_FILEPATH):
+    print("Creating vocab...", flush=True)
+    create_vocab(train_dataset, VOCAB_FILEPATH, special_tokens=SPECIAL_TOKENS.values())
+
+# Tokenize the datasets
+print("Tokenizing datasets...", flush=True)
+tokenizer = CharacterTokenizer(vocab_file=VOCAB_FILEPATH, n_positions=model_config['n_positions'], pad_token=SPECIAL_TOKENS['pad_token'])
 
 config = GPT2Config(
-    vocab_size=50257,        # Vocabulary size (this is the default for GPT-2)
+    vocab_size=len(tokenizer),        # Vocabulary size
     n_positions=model_config['n_positions'],    # Maximum length of input sequences (in tokens)
     n_ctx=model_config['n_ctx'],                # Context size (same as n_positions)
     n_embd=model_config['n_embd'],              # Embedding dimension size
     n_layer=model_config['n_layer'],            # Number of transformer layers
     n_head=model_config['n_head'],              # Number of attention heads
     activation_function=model_config['activation_function'],  # Activation function
-    pad_token_id=50256,      # Padding token (this should be updated)
-    bos_token_id=50256,      # Beginning-of-sequence token
-    eos_token_id=50256,      # End-of-sequence token
+    pad_token_id=tokenizer.pad_token_id,      # Padding token (this should be updated)
+    bos_token_id=tokenizer.bos_token_id,      # Beginning-of-sequence token
+    eos_token_id=tokenizer.eos_token_id,      # End-of-sequence token
 )
 
 model = GPT2LMHeadModel(config)
-print("About to load dataset...", flush=True)
-train_dataset, validation_dataset, entropy = load_baai_data()
-print("Data loaded, tokenizing now...", flush=True)
-
-# Tokenize the datasets
-tokenizer = CharacterTokenizer(config.n_positions, train_file=train_dataset)
 config.pad_token_id = tokenizer.pad_token_id  # Sync the pad_token_id
-print(f"tokenizer.pad_token_id: {tokenizer.pad_token_id}")
 model.resize_token_embeddings(len(tokenizer))  # Adjust model embeddings
-print(f"len(tokenizer): {len(tokenizer)}")
 tokenized_train = train_dataset.map(tokenizer.tokenize, batched=True, remove_columns=["text"])
 tokenized_validation = validation_dataset.map(tokenizer.tokenize, batched=True, remove_columns=["text"])
-print("Datasets tokenized!")
-exit()
 
 num_validation_tokens = 0
 for line in tokenized_validation:
@@ -58,9 +133,9 @@ for line in tokenized_validation:
     num_validation_tokens += sum(line['attention_mask'])
 print(f'num tokens: {num_validation_tokens}')
 
-exit()
 entropy_ratios = []
 
+print("Training...", flush=True)
 class CustomTrainer(Trainer):
     
     def evaluate(self, eval_dataset=None, ignore_keys=None, metric_key_prefix="eval"):
@@ -75,7 +150,7 @@ class CustomTrainer(Trainer):
 
 
 training_args = TrainingArguments(
-    output_dir=checkpoints_dir,                                         # Directory for storing model checkpoints
+    output_dir=checkpoints_dir,                                    # Directory for storing model checkpoints
     eval_strategy="steps",       
     logging_dir=logging_dir,              
     eval_steps=training_config['eval_steps'],
@@ -96,7 +171,7 @@ trainer = CustomTrainer(
     args=training_args,                 
     train_dataset=tokenized_train,      
     eval_dataset=tokenized_validation,  
-    tokenizer=tokenizer.tokenizer,             
+    tokenizer=tokenizer,             
 )
 trainer.train()
 

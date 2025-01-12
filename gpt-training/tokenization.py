@@ -39,14 +39,10 @@ class CharacterTokenizer(PreTrainedTokenizer):
     Construct a character-level tokenizer.
 
     Args:
-        n_positions (`int`):
-            Maximum length of input sequences (in tokens).
-        max_vocab_size (`int`):
-            Upper limit of vocabulary size.
         vocab_file (`str`):
             Path to the vocabulary file.
-        train_file (`str`):
-            Path to training data file.
+        n_positions (`int`):
+            Maximum length of input sequences (in tokens).
         errors (`str`, *optional*, defaults to `"replace"`):
             Paradigm to follow when decoding bytes to UTF-8. See
             [bytes.decode](https://docs.python.org/3/library/stdtypes.html#bytes.decode) for more information.
@@ -66,10 +62,8 @@ class CharacterTokenizer(PreTrainedTokenizer):
     
     def __init__(
         self,
+        vocab_file,
         n_positions,
-        max_vocab_size=None,
-        vocab_file=None,
-        train_file=None,
         errors="replace",
         unk_token="<|endoftext|>",
         bos_token="<|endoftext|>",
@@ -82,24 +76,15 @@ class CharacterTokenizer(PreTrainedTokenizer):
         eos_token = AddedToken(eos_token, lstrip=False, rstrip=False) if isinstance(eos_token, str) else eos_token
         unk_token = AddedToken(unk_token, lstrip=False, rstrip=False) if isinstance(unk_token, str) else unk_token
         pad_token = AddedToken(pad_token, lstrip=False, rstrip=False) if isinstance(pad_token, str) else pad_token
-
+        
         self.add_bos_token = add_bos_token
-        
         self.n_positions = n_positions
-        self.max_vocab_size = max_vocab_size
 
-        # Load vocab if it exists, otherwise train tokenizer
-        if vocab_file is not None:
-            print("Loading vocab...", flush=True)
-            with open(vocab_file, encoding="utf-8") as vocab_handle:
-                self.encoder = json.load(vocab_handle)
-        elif train_file is not None:
-            print("Training vocab...", flush=True)
-            self.encoder = self._train(train_file, max_vocab_size)
-        else:
-            raise ValueError("CharacterTokenizer needs a vocab file or train file.")
-        
+        # Load vocab
+        with open(vocab_file, encoding="utf-8") as vocab_handle:
+            self.encoder = json.load(vocab_handle)
         self.decoder = {v: k for k, v in self.encoder.items()}
+        
         self.errors = errors  # how to handle errors in decoding
         self.cache = {}
 
@@ -111,7 +96,6 @@ class CharacterTokenizer(PreTrainedTokenizer):
             pad_token=pad_token,
             **kwargs,
         )
-        print("CharacterTokenizer init finished.", flush=True)
 
     @property
     def vocab_size(self):
@@ -119,28 +103,6 @@ class CharacterTokenizer(PreTrainedTokenizer):
 
     def get_vocab(self):
         return dict(self.encoder, **self.added_tokens_encoder)
-    
-    def _train(self, dataset, max_vocab_size=None, text_field="text"):
-        print("_train method called...", flush=True)
-        char_counter = Counter()
-        for example in dataset:
-            text = example[text_field]
-            char_counter.update(text)
-
-        # Assign IDs to special tokens
-        current_id = 0
-        for token in self.special_tokens_map:
-            self.encoder[token] = current_id
-            self.decoder[current_id] = token
-            current_id += 1
-
-        # Assign IDs to characters
-        for char, _ in char_counter.most_common(max_vocab_size):
-            if char not in self.encoder:
-                self.encoder[char] = current_id
-                self.decoder[current_id] = char
-                current_id += 1
-        print(f"_train method finished. vocab size: {len(self.encoder)}", flush=True)
 
     def _tokenize(self, text):
         """Tokenize a string."""
