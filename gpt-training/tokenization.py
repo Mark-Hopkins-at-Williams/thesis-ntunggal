@@ -107,6 +107,21 @@ class CharacterTokenizer(PreTrainedTokenizer):
     def _tokenize(self, text):
         """Tokenize a string."""
         return [char if char in self.encoder else self.unk_token for char in text]
+    
+    def tokenize_batch(self, examples):
+        if isinstance(examples, str):
+            texts = [examples]
+        else:
+            texts = examples["text"]
+        tokenized = self(
+            texts, 
+            padding="max_length", 
+            truncation=True, 
+            max_length=self.n_positions, 
+            return_tensors=None
+        )
+        tokenized["labels"] = tokenized["input_ids"].copy()
+        return tokenized
 
     def _convert_token_to_id(self, token):
         """Converts a token (str) in an id using the vocab."""

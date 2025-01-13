@@ -65,7 +65,7 @@ def create_vocab(train_dataset, file_path, special_tokens=[], text_field="text")
         text = example[text_field]
         char_counter.update(text)
         # Stop at 1 million examples
-        if i >= 10:
+        if i >= 1000000:
             break
 
     # Add special tokens to vocab
@@ -107,6 +107,10 @@ if not os.path.exists(VOCAB_FILEPATH):
 # Tokenize the datasets
 print("Tokenizing datasets...", flush=True)
 tokenizer = CharacterTokenizer(vocab_file=VOCAB_FILEPATH, n_positions=model_config['n_positions'], pad_token=SPECIAL_TOKENS['pad_token'])
+print(f"len(tokenizer): {len(tokenizer)}")
+print(f"tokenizer.pad_token_id: {tokenizer.pad_token_id}")
+print(f"tokenizer.bos_token_id: {tokenizer.bos_token_id}")
+print(f"tokenizer.eos_token_id: {tokenizer.eos_token_id}")
 
 config = GPT2Config(
     vocab_size=len(tokenizer),        # Vocabulary size
@@ -124,8 +128,8 @@ config = GPT2Config(
 model = GPT2LMHeadModel(config)
 config.pad_token_id = tokenizer.pad_token_id  # Sync the pad_token_id
 model.resize_token_embeddings(len(tokenizer))  # Adjust model embeddings
-tokenized_train = train_dataset.map(tokenizer.tokenize, batched=True, remove_columns=["text"])
-tokenized_validation = validation_dataset.map(tokenizer.tokenize, batched=True, remove_columns=["text"])
+tokenized_train = train_dataset.map(tokenizer.tokenize_batch, batched=True, remove_columns=["text"])
+tokenized_validation = validation_dataset.map(tokenizer.tokenize_batch, batched=True, remove_columns=["text"])
 
 num_validation_tokens = 0
 for line in tokenized_validation:

@@ -6,4 +6,4 @@
 #SBATCH -o log_%j.out  
 #SBATCH -e log_%j.err
 #SBATCH --gres=gpu:1
-CUDA_VISIBLE_DEVICES=3 python train_gpt_custom.py experiments/model_trial2
+CUDA_VISIBLE_DEVICES=0 python train_gpt_custom.py experiments/model_trial2
