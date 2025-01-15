@@ -8,8 +8,8 @@
         "activation_function": "gelu"
     },
     "training": {
-        "eval_steps": 1000,
-        "max_steps": 20000,
+        "eval_steps": 10,
+        "max_steps": 30,
         "batch_size": 16,
         "learning_rate": 5e-5,
         "weight_decay": 0.01,

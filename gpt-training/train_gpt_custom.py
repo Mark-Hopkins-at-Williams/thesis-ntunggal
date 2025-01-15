@@ -5,19 +5,20 @@ from os.path import join
 import sys
 from collections import Counter
 import matplotlib.pyplot as plt
-from tokenization import CharacterTokenizer
+from tokenization import CharacterTokenizer, SubwordBPETokenizer
 from transformers import Trainer, TrainingArguments
 from transformers import Trainer
 from transformers import GPT2Config
 from transformers import GPT2LMHeadModel
 from transformers import TrainingArguments, Trainer
 
-VOCAB_FILEPATH = "/mnt/storage/ntunggal/thesis-ntunggal/gpt-training/char-tokenizer/vocab.json"
+VOCAB_FILEPATH = "/mnt/storage/ntunggal/thesis-ntunggal/gpt-training/bpe-tokenizer/vocab.json"
+MERGES_FILEPATH = "/mnt/storage/ntunggal/thesis-ntunggal/gpt-training/bpe-tokenizer/merges.txt"
 SPECIAL_TOKENS = {
-    'bos_token': '<|endoftext|>', # Matches CharacterTokenizer default
-    'eos_token': '<|endoftext|>', # Matches CharacterTokenizer default
-    'unk_token': '<|endoftext|>', # Matches CharacterTokenizer default
-    'pad_token': '[PAD]',         # Custom defined
+    'bos_token': '[BOS]',
+    'eos_token': '[EOS]',
+    'unk_token': '[UNK]',
+    'pad_token': '[PAD]',
 }
 
 def view_new_char_growth(train_dataset):
@@ -50,43 +51,6 @@ def view_new_char_growth(train_dataset):
     print(f"Number of examples: {count}")
     print(f"100 most common characters: {unique_chars.most_common(100)}")
 
-def create_vocab(train_dataset, file_path, special_tokens=[], text_field="text"):
-    """
-    Creates a vocab.json file from a given training dataset.
-
-    Args:
-        train_dataset: Dataset from which to create vocab from.
-        file_path: path of vocab.json file to create.
-        special_tokens: list of special tokens.
-        text_field: the column header of the dataset containing text to train on. 
-    """
-    char_counter = Counter()
-    for i, example in enumerate(train_dataset, start=1):
-        text = example[text_field]
-        char_counter.update(text)
-        # Stop at 1 million examples
-        if i >= 1000000:
-            break
-
-    # Add special tokens to vocab
-    vocab = {}
-    current_id = 0
-    for token in special_tokens:
-        if token not in vocab:
-            vocab[token] = current_id
-            current_id += 1
-
-    # Add regular tokens to vocab
-    for char, _ in char_counter.most_common():
-        if char not in vocab:
-            vocab[char] = current_id
-            current_id += 1
-    
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(vocab, f, indent=None, ensure_ascii=False, separators=(",", ":"))
-    return
-
 experiment_dir = sys.argv[1]
 with open(join(experiment_dir, 'experiment.json')) as reader:
     experiment_config = json.load(reader)
@@ -101,12 +65,22 @@ os.makedirs(logging_dir, exist_ok=True)
 print("Loading dataset...", flush=True)
 train_dataset, validation_dataset, entropy = load_baai_data()
 if not os.path.exists(VOCAB_FILEPATH):
-    print("Creating vocab...", flush=True)
-    create_vocab(train_dataset, VOCAB_FILEPATH, special_tokens=SPECIAL_TOKENS.values())
+    print("Creating vocab and merges...", flush=True)
+    SubwordBPETokenizer.create_vocab(train_dataset, VOCAB_FILEPATH, MERGES_FILEPATH, special_tokens=SPECIAL_TOKENS.values())
 
+exit()
 # Tokenize the datasets
 print("Tokenizing datasets...", flush=True)
-tokenizer = CharacterTokenizer(vocab_file=VOCAB_FILEPATH, n_positions=model_config['n_positions'], pad_token=SPECIAL_TOKENS['pad_token'])
+tokenizer = CharacterTokenizer(
+    vocab_file=VOCAB_FILEPATH, 
+    n_positions=model_config['n_positions'], 
+    unk_token=SPECIAL_TOKENS['unk_token'],
+    bos_token=SPECIAL_TOKENS['bos_token'],
+    eos_token=SPECIAL_TOKENS['eos_token'],
+    pad_token=SPECIAL_TOKENS['pad_token'],
+)
+
+
 print(f"len(tokenizer): {len(tokenizer)}")
 print(f"tokenizer.pad_token_id: {tokenizer.pad_token_id}")
 print(f"tokenizer.bos_token_id: {tokenizer.bos_token_id}")
