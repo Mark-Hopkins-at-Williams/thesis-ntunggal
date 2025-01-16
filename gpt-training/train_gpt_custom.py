@@ -12,13 +12,15 @@ from transformers import GPT2Config
 from transformers import GPT2LMHeadModel
 from transformers import TrainingArguments, Trainer
 
-VOCAB_FILEPATH = "/mnt/storage/ntunggal/thesis-ntunggal/gpt-training/bpe-tokenizer/vocab.json"
-MERGES_FILEPATH = "/mnt/storage/ntunggal/thesis-ntunggal/gpt-training/bpe-tokenizer/merges.txt"
+SAVE_DIRECTORY = "/mnt/storage/ntunggal/thesis-ntunggal/gpt-training/bpe-tokenizer"
+VOCAB_FILEPATH = os.path.join(SAVE_DIRECTORY, "vocab.json")
+MERGES_FILEPATH = os.path.join(SAVE_DIRECTORY, "merges.txt")
+SPM_FILEPATH = os.path.join(SAVE_DIRECTORY, "bpe_tokenizer.model")
 SPECIAL_TOKENS = {
-    'bos_token': '[BOS]',
-    'eos_token': '[EOS]',
-    'unk_token': '[UNK]',
-    'pad_token': '[PAD]',
+    "bos_token": "<s>",
+    "eos_token": "</s>",
+    "unk_token": "<unk>",
+    "pad_token": "<pad>",
 }
 
 def view_new_char_growth(train_dataset):
@@ -64,22 +66,20 @@ os.makedirs(logging_dir, exist_ok=True)
 
 print("Loading dataset...", flush=True)
 train_dataset, validation_dataset, entropy = load_baai_data()
-if not os.path.exists(VOCAB_FILEPATH):
+if not os.path.exists(SAVE_DIRECTORY):
     print("Creating vocab and merges...", flush=True)
-    SubwordBPETokenizer.create_vocab(train_dataset, VOCAB_FILEPATH, MERGES_FILEPATH, special_tokens=SPECIAL_TOKENS.values())
+    SubwordBPETokenizer.create_vocab(train_dataset, SAVE_DIRECTORY, special_tokens=[SPECIAL_TOKENS['pad_token']])
 
-exit()
 # Tokenize the datasets
 print("Tokenizing datasets...", flush=True)
-tokenizer = CharacterTokenizer(
-    vocab_file=VOCAB_FILEPATH, 
+tokenizer = SubwordBPETokenizer(
+    spm_model_file=SPM_FILEPATH, 
     n_positions=model_config['n_positions'], 
     unk_token=SPECIAL_TOKENS['unk_token'],
     bos_token=SPECIAL_TOKENS['bos_token'],
     eos_token=SPECIAL_TOKENS['eos_token'],
     pad_token=SPECIAL_TOKENS['pad_token'],
 )
-
 
 print(f"len(tokenizer): {len(tokenizer)}")
 print(f"tokenizer.pad_token_id: {tokenizer.pad_token_id}")
