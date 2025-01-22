@@ -1,13 +1,13 @@
 {
     "tokenizer": {
-        "name": "ByteBPETokenizer",
-        "max_vocab_size": 123,
-        "max_examples": 10,
+        "name": "SubwordBPETokenizer",
+        "max_vocab_size": 50267,
+        "max_examples": 1000000,
         "special_tokens": {
             "pad_token": "<pad>"
         },
-        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/byte-bpe",
-        "vocab_file_name": "byte_bpe.model"
+        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/subword-bpe",
+        "vocab_file_name": "bpe_tokenizer.model"
     },
     "model": {
         "n_positions": 1024,
@@ -18,8 +18,8 @@
         "activation_function": "gelu"
     },
     "training": {
-        "eval_steps": 10,
-        "max_steps": 30,
+        "eval_steps": 1000,
+        "max_steps": 20000,
         "batch_size": 16,
         "learning_rate": 5e-5,
         "weight_decay": 0.01,

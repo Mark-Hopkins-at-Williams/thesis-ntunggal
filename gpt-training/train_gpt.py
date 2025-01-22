@@ -3,18 +3,26 @@ import json
 import os
 from os.path import join
 import sys
-from tokenization import DefaultGPT2Tokenizer
+from tokenization import CharacterTokenizer, SubwordBPETokenizer, ByteTokenizer, ByteBPETokenizer
 from transformers import Trainer, TrainingArguments
 from transformers import Trainer
 from transformers import GPT2Config
 from transformers import GPT2LMHeadModel
 from transformers import TrainingArguments, Trainer
 
+TOKENIZERS = {
+    "CharacterTokenizer": CharacterTokenizer,
+    "SubwordBPETokenizer": SubwordBPETokenizer,
+    "ByteTokenizer": ByteTokenizer,
+    "ByteBPETokenizer": ByteBPETokenizer,
+}
 
+# Load configs
 experiment_dir = sys.argv[1]
 with open(join(experiment_dir, 'experiment.json')) as reader:
     experiment_config = json.load(reader)
 
+tokenizer_config = experiment_config['tokenizer']
 model_config = experiment_config['model']
 training_config = experiment_config['training']
 checkpoints_dir = join(experiment_dir, "checkpoints")
@@ -22,30 +30,63 @@ logging_dir = join(experiment_dir, "logs")
 os.makedirs(checkpoints_dir, exist_ok=True)
 os.makedirs(logging_dir, exist_ok=True)
 
+# Set the tokenizer from config
+print(f"Tokenizer: {tokenizer_config['name']}", flush=True)
+Tokenizer = TOKENIZERS[tokenizer_config['name']]
+max_vocab_size = tokenizer_config['max_vocab_size']
+max_examples = tokenizer_config['max_examples'] if tokenizer_config['max_examples'] != "" else None
+special_tokens = tokenizer_config['special_tokens']
+save_directory = tokenizer_config['tokenizer_files_dir']
+vocab_file_path = os.path.join(save_directory, tokenizer_config['vocab_file_name'])
+
+# Load dataset and vocab files
+print("Loading dataset...", flush=True)
+train_dataset, validation_dataset, entropy = load_baai_data()
+if save_directory != "" and not os.path.exists(save_directory):
+    print("Creating vocab and merges...", flush=True)
+    Tokenizer.create_vocab(train_dataset, 
+                           save_directory, 
+                           special_tokens=list(special_tokens.values()), 
+                           max_vocab_size=max_vocab_size, 
+                           max_examples=max_examples)
+
+# Create the tokenizer
+print("Creating tokenizer...", flush=True)
+tokenizer_kwargs = {
+    'vocab_file': vocab_file_path,
+    'n_positions': model_config['n_positions'],
+}
+for key in ['unk_token', 'bos_token', 'eos_token', 'pad_token']:
+    if key in special_tokens:
+        tokenizer_kwargs[key] = special_tokens[key]
+tokenizer = Tokenizer(**tokenizer_kwargs)
+
+print(f"len(tokenizer): {len(tokenizer)}")
+print(f"tokenizer.unk_token_id: {tokenizer.unk_token_id}")
+print(f"tokenizer.bos_token_id: {tokenizer.bos_token_id}")
+print(f"tokenizer.eos_token_id: {tokenizer.eos_token_id}")
+print(f"tokenizer.pad_token_id: {tokenizer.pad_token_id}")
 
 config = GPT2Config(
-    vocab_size=50257,        # Vocabulary size (this is the default for GPT-2)
+    vocab_size=len(tokenizer),        # Vocabulary size
     n_positions=model_config['n_positions'],    # Maximum length of input sequences (in tokens)
     n_ctx=model_config['n_ctx'],                # Context size (same as n_positions)
     n_embd=model_config['n_embd'],              # Embedding dimension size
     n_layer=model_config['n_layer'],            # Number of transformer layers
     n_head=model_config['n_head'],              # Number of attention heads
     activation_function=model_config['activation_function'],  # Activation function
-    pad_token_id=50256,      # Padding token (this should be updated)
-    bos_token_id=50256,      # Beginning-of-sequence token
-    eos_token_id=50256,      # End-of-sequence token
+    pad_token_id=tokenizer.pad_token_id,      # Padding token (this should be updated)
+    bos_token_id=tokenizer.bos_token_id,      # Beginning-of-sequence token
+    eos_token_id=tokenizer.eos_token_id,      # End-of-sequence token
 )
 
+# Tokenize datasets
+print("Tokenizing datasets...", flush=True)
 model = GPT2LMHeadModel(config)
-train_dataset, validation_dataset, entropy = load_baai_data()
-print("Data loaded, tokenizing now...", flush=True)
-
-# Tokenize the datasets
-tokenizer = DefaultGPT2Tokenizer(config.n_positions)
 config.pad_token_id = tokenizer.pad_token_id  # Sync the pad_token_id
 model.resize_token_embeddings(len(tokenizer))  # Adjust model embeddings
-tokenized_train = train_dataset.map(tokenizer.tokenize, batched=True, remove_columns=["text"])
-tokenized_validation = validation_dataset.map(tokenizer.tokenize, batched=True, remove_columns=["text"])
+tokenized_train = train_dataset.map(tokenizer.tokenize_batch, batched=True, remove_columns=["text"])
+tokenized_validation = validation_dataset.map(tokenizer.tokenize_batch, batched=True, remove_columns=["text"])
 
 num_validation_tokens = 0
 for line in tokenized_validation:
@@ -55,6 +96,7 @@ print(f'num tokens: {num_validation_tokens}')
 
 entropy_ratios = []
 
+print("Training...", flush=True)
 class CustomTrainer(Trainer):
     
     def evaluate(self, eval_dataset=None, ignore_keys=None, metric_key_prefix="eval"):
@@ -69,7 +111,7 @@ class CustomTrainer(Trainer):
 
 
 training_args = TrainingArguments(
-    output_dir=checkpoints_dir,                                         # Directory for storing model checkpoints
+    output_dir=checkpoints_dir,                                    # Directory for storing model checkpoints
     eval_strategy="steps",       
     logging_dir=logging_dir,              
     eval_steps=training_config['eval_steps'],
@@ -90,7 +132,7 @@ trainer = CustomTrainer(
     args=training_args,                 
     train_dataset=tokenized_train,      
     eval_dataset=tokenized_validation,  
-    tokenizer=tokenizer.tokenizer,             
+    tokenizer=tokenizer,             
 )
 trainer.train()
 
