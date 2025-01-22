@@ -513,7 +513,7 @@ class ByteBPETokenizer(PreTrainedTokenizer):
             model_prefix: Prefix for the SentencePiece model file.
         """
         def text_to_byte_seq(text):
-            return " ".join([str(c) for c in text.encode("utf-8")])
+            return "".join([chr(c) for c in text.encode("utf-8")])
         
         os.makedirs(save_directory, exist_ok=True)
         temp_file = os.path.join(save_directory, "temp_text.txt")
@@ -534,7 +534,7 @@ class ByteBPETokenizer(PreTrainedTokenizer):
             vocab_size=max_vocab_size,
             user_defined_symbols=special_tokens,
             character_coverage=1.0,
-            model_type="word",
+            model_type="bpe",
             max_sentence_length=16384
         )
 
@@ -547,7 +547,7 @@ class ByteBPETokenizer(PreTrainedTokenizer):
             json.dump(vocab, f, indent=None, ensure_ascii=False, separators=(",", ":"))
 
         # Cleanup temporary file
-        # os.remove(temp_file)
+        os.remove(temp_file)
     
     @property
     def vocab_size(self):

@@ -1,4 +1,14 @@
 {
+    "tokenizer": {
+        "name": "ByteTokenizer",
+        "max_vocab_size": "",
+        "max_examples": "",
+        "special_tokens": {
+            "pad_token": "<pad>"
+        },
+        "tokenizer_files_dir": "",
+        "vocab_file_name": ""
+    },
     "model": {
         "n_positions": 1024,
         "n_ctx": 1024,

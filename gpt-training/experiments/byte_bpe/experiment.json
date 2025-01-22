@@ -1,8 +1,8 @@
 {
     "tokenizer": {
         "name": "ByteBPETokenizer",
-        "max_vocab_size": 500,
-        "max_examples": 10,
+        "max_vocab_size": 50267,
+        "max_examples": "",
         "special_tokens": {
             "pad_token": "<pad>"
         },
@@ -18,8 +18,8 @@
         "activation_function": "gelu"
     },
     "training": {
-        "eval_steps": 10,
-        "max_steps": 30,
+        "eval_steps": 1000,
+        "max_steps": 20000,
         "batch_size": 16,
         "learning_rate": 5e-5,
         "weight_decay": 0.01,
