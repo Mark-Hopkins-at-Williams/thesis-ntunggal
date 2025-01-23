@@ -405,6 +405,7 @@ class ByteTokenizer(PreTrainedTokenizer):
     
     @property
     def vocab_size(self):
+        # Special tokens handled separately
         return self._utf_vocab_size
 
     def get_vocab(self):

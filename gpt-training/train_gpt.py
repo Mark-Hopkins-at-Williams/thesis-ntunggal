@@ -37,7 +37,7 @@ max_vocab_size = tokenizer_config['max_vocab_size']
 max_examples = tokenizer_config['max_examples'] if tokenizer_config['max_examples'] != "" else None
 special_tokens = tokenizer_config['special_tokens']
 save_directory = tokenizer_config['tokenizer_files_dir']
-vocab_file_path = os.path.join(save_directory, tokenizer_config['vocab_file_name'])
+vocab_file_path = join(save_directory, tokenizer_config['vocab_file_name'])
 
 # Load dataset and vocab files
 print("Loading dataset...", flush=True)
