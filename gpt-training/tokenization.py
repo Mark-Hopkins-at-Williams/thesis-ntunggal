@@ -638,8 +638,8 @@ class ChineseBPETokenizer(PreTrainedTokenizer):
         max_vocab_size=50257, 
         max_examples=None,
         model_prefix="chinese_bpe",
-        input_method=None,
-        delimiter="",
+        input_method="pinyin",
+        delimiter="#",
         disambiguate=False,
     ):
         """
@@ -679,7 +679,7 @@ class ChineseBPETokenizer(PreTrainedTokenizer):
             for i, example in enumerate(train_dataset, start=1):
                 text = example[text_field].strip()
                 if text:
-                    f.write(pretokenize(text) + "\n")
+                    f.write(pretokenize(text, input_method, delimiter, disambiguate) + "\n")
                 if max_examples is not None and i >= max_examples:
                     break
         

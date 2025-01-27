@@ -3,7 +3,11 @@ import json
 import os
 from os.path import join
 import sys
-from tokenization import CharacterTokenizer, SubwordBPETokenizer, ByteTokenizer, ByteBPETokenizer
+from tokenization import (CharacterTokenizer,
+                          SubwordBPETokenizer,
+                          ByteTokenizer,
+                          ByteBPETokenizer,
+                          ChineseBPETokenizer)
 from transformers import Trainer, TrainingArguments
 from transformers import Trainer
 from transformers import GPT2Config
@@ -15,6 +19,7 @@ TOKENIZERS = {
     "SubwordBPETokenizer": SubwordBPETokenizer,
     "ByteTokenizer": ByteTokenizer,
     "ByteBPETokenizer": ByteBPETokenizer,
+    "ChineseBPETokenizer": ChineseBPETokenizer,
 }
 
 # Load configs
@@ -32,6 +37,8 @@ os.makedirs(logging_dir, exist_ok=True)
 
 # Set the tokenizer from config
 print(f"Tokenizer: {tokenizer_config['name']}", flush=True)
+# if tokenizer_config['name'] == "ChineseBPETokenizer":
+#     print(f"Input method: {tokenizer_config['input_method']}")
 Tokenizer = TOKENIZERS[tokenizer_config['name']]
 max_vocab_size = tokenizer_config['max_vocab_size']
 max_examples = tokenizer_config['max_examples'] if tokenizer_config['max_examples'] != "" else None

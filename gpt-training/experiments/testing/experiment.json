@@ -1,13 +1,13 @@
 {
     "tokenizer": {
-        "name": "ByteBPETokenizer",
-        "max_vocab_size": 500,
+        "name": "ChineseBPETokenizer",
+        "max_vocab_size": 616,
         "max_examples": 10,
         "special_tokens": {
             "pad_token": "<pad>"
         },
-        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/byte-bpe",
-        "vocab_file_name": "byte_bpe.model"
+        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/pinyin-bpe",
+        "vocab_file_name": "chinese_bpe.model"
     },
     "model": {
         "n_positions": 1024,
