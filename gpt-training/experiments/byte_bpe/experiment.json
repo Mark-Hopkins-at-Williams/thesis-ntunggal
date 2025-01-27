@@ -2,7 +2,7 @@
     "tokenizer": {
         "name": "ByteBPETokenizer",
         "max_vocab_size": 50267,
-        "max_examples": "",
+        "max_examples": 1000000,
         "special_tokens": {
             "pad_token": "<pad>"
         },

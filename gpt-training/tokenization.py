@@ -5,6 +5,7 @@ from typing import Optional, Tuple
 from transformers import GPT2TokenizerFast
 from transformers import AddedToken, PreTrainedTokenizer, logging
 import sentencepiece as spm
+from pypinyin import pinyin, Style
 
 logger = logging.get_logger(__name__)
 
@@ -453,7 +454,7 @@ class ByteTokenizer(PreTrainedTokenizer):
 
 class ByteBPETokenizer(PreTrainedTokenizer):
     """
-    Construct a Subword BPE tokenizer.
+    Construct a Byte BPE tokenizer.
     """
     
     def __init__(
@@ -537,6 +538,160 @@ class ByteBPETokenizer(PreTrainedTokenizer):
             character_coverage=1.0,
             model_type="bpe",
             max_sentence_length=16384
+        )
+
+        # Create and save vocab.json
+        spm_model_file = os.path.join(save_directory, f"{model_prefix}.model")
+        sp = spm.SentencePieceProcessor(model_file=spm_model_file)
+        vocab = {sp.id_to_piece(i): i for i in range(sp.get_piece_size())}
+        vocab_file = os.path.join(save_directory, "vocab.json")
+        with open(vocab_file, "w", encoding="utf-8") as f:
+            json.dump(vocab, f, indent=None, ensure_ascii=False, separators=(",", ":"))
+
+        # Cleanup temporary file
+        os.remove(temp_file)
+    
+    @property
+    def vocab_size(self):
+        return len(self.encoder)
+
+    def get_vocab(self):
+        return dict(self.encoder, **self.added_tokens_encoder)
+
+    def _tokenize(self, text):
+        """Tokenize a string. Returns a list of BPE tokens."""
+        return self.sp.encode(text, out_type=str)
+    
+    def tokenize_batch(self, examples):
+        if isinstance(examples, str):
+            texts = [examples]
+        else:
+            texts = examples["text"]
+        tokenized = self(
+            texts, 
+            padding="max_length", 
+            truncation=True, 
+            max_length=self.n_positions, 
+            return_tensors=None
+        )
+        tokenized["labels"] = tokenized["input_ids"].copy()
+        return tokenized
+
+    def _convert_token_to_id(self, token):
+        """Converts a token (str) in an id using the vocab."""
+        return self.encoder.get(token, self.encoder.get(self.unk_token))
+
+    def _convert_id_to_token(self, index):
+        """Converts an index (integer) in a token (str) using the vocab."""
+        return self.decoder.get(index, self.unk_token)
+
+    def save_vocabulary(self, save_directory: str, filename_prefix: Optional[str] = None) -> Tuple[str]:
+        return ()
+    
+
+class ChineseBPETokenizer(PreTrainedTokenizer):
+    """
+    Construct a Chinese BPE tokenizer.
+    """
+    
+    def __init__(
+        self,
+        vocab_file,
+        n_positions,
+        unk_token="<unk>",
+        bos_token="<s>",
+        eos_token="</s>",
+        pad_token="<pad>",
+        add_bos_token=False,
+        **kwargs,
+    ):
+        # Hardcoded since sentencepiece uses these special tokens
+        bos_token = AddedToken("<s>", lstrip=False, rstrip=False)
+        eos_token = AddedToken("</s>", lstrip=False, rstrip=False)
+        unk_token = AddedToken("<unk>", lstrip=False, rstrip=False)
+        pad_token = AddedToken(pad_token, lstrip=False, rstrip=False)
+        
+        self.add_bos_token = add_bos_token
+        self.n_positions = n_positions
+
+        # Load spm vocab and merges
+        self.sp = spm.SentencePieceProcessor()
+        self.sp.load(vocab_file)
+        self.encoder = {self.sp.id_to_piece(i): i for i in range(self.sp.get_piece_size())}
+        self.decoder = {v: k for k, v in self.encoder.items()}
+
+        super().__init__(
+            unk_token=unk_token,
+            bos_token=bos_token,
+            eos_token=eos_token,
+            pad_token=pad_token,
+            **kwargs,
+        )
+
+    @classmethod
+    def create_vocab(
+        cls, 
+        train_dataset, 
+        save_directory, 
+        special_tokens=[], 
+        text_field="text", 
+        max_vocab_size=50257, 
+        max_examples=None,
+        model_prefix="chinese_bpe",
+        input_method=None,
+        delimiter="",
+        disambiguate=False,
+    ):
+        """
+        Creates a SentencePiece model and saves vocab.json and spm.model.
+
+        Args:
+            train_dataset: Dataset to create vocab from.
+            save_directory: Directory to save spm.model and vocab.json.
+            special_tokens: List of special tokens to include.
+            text_field: Field containing text data in the dataset.
+            max_vocab_size: Max vocabulary size.
+            max_examples: Number of examples to use for training.
+            model_prefix: Prefix for the SentencePiece model file.
+        """
+        def pretokenize(text, input_method, delimiter, disambiguate):
+            if input_method == "pinyin":
+                # nǐ#hǎo#，#wǒ#shì#xiǎo#bái
+                pretokenized = pinyin(text, style=Style.TONE, heteronym=False)
+                return f"{delimiter}".join(["".join(word) for word in pretokenized])
+            elif input_method == "zhuyin":
+                # ㄋㄧˇ#ㄏㄠˇ#，#ㄨㄛˇ#ㄕˋ#ㄒㄧㄠˇ#ㄅㄞˊ#
+                pretokenized = pinyin(text, style=Style.BOPOMOFO, heteronym=False)
+                return f"{delimiter}".join(["".join(word) for word in pretokenized])
+            elif input_method == "wubi":
+                pass
+            elif input_method == "cangjie":
+                pass
+            elif input_method == "zhengma":
+                pass
+            else:
+                raise ValueError(f"Received unknown input_method: {input_method}.")
+        
+        os.makedirs(save_directory, exist_ok=True)
+        temp_file = os.path.join(save_directory, "temp_text.txt")
+        
+        with open(temp_file, "w", encoding="utf-8") as f:
+            for i, example in enumerate(train_dataset, start=1):
+                text = example[text_field].strip()
+                if text:
+                    f.write(pretokenize(text) + "\n")
+                if max_examples is not None and i >= max_examples:
+                    break
+        
+        # Define SentencePiece training parameters
+        print(f"special tokens: {special_tokens}")
+        spm.SentencePieceTrainer.train(
+            input=temp_file,
+            model_prefix=os.path.join(save_directory, model_prefix),
+            vocab_size=max_vocab_size,
+            user_defined_symbols=special_tokens,
+            character_coverage=1.0,
+            model_type="bpe",
         )
 
         # Create and save vocab.json
