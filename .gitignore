@@ -5,4 +5,4 @@ checkpoints/
 logs/
 *.err
 *.out
-char-tokenizer/
+log*
