@@ -13,6 +13,7 @@ from transformers import Trainer
 from transformers import GPT2Config
 from transformers import GPT2LMHeadModel
 from transformers import TrainingArguments, Trainer
+from collections import defaultdict
 
 TOKENIZERS = {
     "CharacterTokenizer": CharacterTokenizer,
@@ -37,8 +38,10 @@ os.makedirs(logging_dir, exist_ok=True)
 
 # Set the tokenizer from config
 print(f"Tokenizer: {tokenizer_config['name']}", flush=True)
-# if tokenizer_config['name'] == "ChineseBPETokenizer":
-#     print(f"Input method: {tokenizer_config['input_method']}")
+input_method = tokenizer_config['input_method']
+assert input_method in ['pinyin_tone_above', 'pinyin_tone_after', 'zhuyin', 'wubi', 'cangjie', 'zhengma', '']
+if tokenizer_config['name'] == "ChineseBPETokenizer":
+    print(f"Input method: {input_method}", flush=True)
 Tokenizer = TOKENIZERS[tokenizer_config['name']]
 max_vocab_size = tokenizer_config['max_vocab_size']
 max_examples = tokenizer_config['max_examples'] if tokenizer_config['max_examples'] != "" else None
@@ -55,7 +58,8 @@ if save_directory != "" and not os.path.exists(save_directory):
                            save_directory, 
                            special_tokens=list(special_tokens.values()), 
                            max_vocab_size=max_vocab_size, 
-                           max_examples=max_examples)
+                           max_examples=max_examples,
+                           input_method=input_method)
 
 # Create the tokenizer
 print("Creating tokenizer...", flush=True)
@@ -66,6 +70,9 @@ tokenizer_kwargs = {
 for key in ['unk_token', 'bos_token', 'eos_token', 'pad_token']:
     if key in special_tokens:
         tokenizer_kwargs[key] = special_tokens[key]
+if input_method != '':
+    tokenizer_kwargs['input_method'] = input_method
+
 tokenizer = Tokenizer(**tokenizer_kwargs)
 
 print(f"len(tokenizer): {len(tokenizer)}")
@@ -73,6 +80,8 @@ print(f"tokenizer.unk_token_id: {tokenizer.unk_token_id}")
 print(f"tokenizer.bos_token_id: {tokenizer.bos_token_id}")
 print(f"tokenizer.eos_token_id: {tokenizer.eos_token_id}")
 print(f"tokenizer.pad_token_id: {tokenizer.pad_token_id}")
+
+print(f"tokenizer.tokenize(你好,最近怎么样？): {tokenizer.tokenize('你好,最近怎么样？')}")
 
 config = GPT2Config(
     vocab_size=len(tokenizer),        # Vocabulary size
@@ -94,6 +103,7 @@ config.pad_token_id = tokenizer.pad_token_id  # Sync the pad_token_id
 model.resize_token_embeddings(len(tokenizer))  # Adjust model embeddings
 tokenized_train = train_dataset.map(tokenizer.tokenize_batch, batched=True, remove_columns=["text"])
 tokenized_validation = validation_dataset.map(tokenizer.tokenize_batch, batched=True, remove_columns=["text"])
+print(f"total model parameters: {model.num_parameters()}")
 
 num_validation_tokens = 0
 for line in tokenized_validation:
@@ -143,6 +153,32 @@ trainer = CustomTrainer(
 )
 trainer.train()
 
+# Log parameter counts
+param_counts = defaultdict(int)
+for name, param in model.named_parameters():
+    param_type = "Other"
+    
+    if "wte" in name:
+        param_type = "Word Embeddings"
+    elif "wpe" in name:
+        param_type = "Position Embeddings"
+    elif "ln" in name:
+        param_type = "Layer Normalization"
+    elif "mlp" in name or "c_fc" in name or "c_proj" in name:
+        param_type = "Feed-Forward Network"
+    elif "attn" in name:
+        param_type = "Self-Attention"
+    elif "lm_head" in name:
+        param_type = "Final Output Layer"
+    
+    param_counts[param_type] += param.numel()
+
+with open(join(experiment_dir, 'parameter_counts.txt'), 'w') as writer:
+    for name, count in param_counts.items():
+        writer.write(f'{name}: {count}\n')
+    writer.write(f'Total parameter count: {model.num_parameters()}\n')
+
+# Log ratios
 with open(join(experiment_dir, 'ratios.txt'), 'w') as writer:
     steps_so_far = training_config['eval_steps']
     for ratio in entropy_ratios:

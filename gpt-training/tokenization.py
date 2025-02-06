@@ -6,6 +6,7 @@ from transformers import GPT2TokenizerFast
 from transformers import AddedToken, PreTrainedTokenizer, logging
 import sentencepiece as spm
 from pypinyin import pinyin, Style
+import re
 
 logger = logging.get_logger(__name__)
 
@@ -84,6 +85,7 @@ class CharacterTokenizer(PreTrainedTokenizer):
         max_vocab_size=50257, 
         max_examples=None,
         model_prefix="char_tokenizer",
+        input_method="",
     ):
         """
         Creates and saves a vocab.json file.
@@ -238,6 +240,7 @@ class SubwordBPETokenizer(PreTrainedTokenizer):
         max_vocab_size=50257, 
         max_examples=None,
         model_prefix="bpe_tokenizer",
+        input_method="",
     ):
         """
         Creates a SentencePiece model and saves vocab.json and spm.model.
@@ -389,6 +392,7 @@ class ByteTokenizer(PreTrainedTokenizer):
         max_vocab_size=50257, 
         max_examples=None,
         model_prefix="byte_tokenizer",
+        input_method="",
     ):
         """
         ByteTokenizer does not need to be trained.
@@ -501,6 +505,7 @@ class ByteBPETokenizer(PreTrainedTokenizer):
         max_vocab_size=50257, 
         max_examples=None,
         model_prefix="byte_bpe",
+        input_method="",
     ):
         """
         Creates a SentencePiece model and saves vocab.json and spm.model.
@@ -537,7 +542,8 @@ class ByteBPETokenizer(PreTrainedTokenizer):
             user_defined_symbols=special_tokens,
             character_coverage=1.0,
             model_type="bpe",
-            max_sentence_length=16384
+            max_sentence_length=16384,
+            split_by_unicode_script=False,
         )
 
         # Create and save vocab.json
@@ -560,7 +566,9 @@ class ByteBPETokenizer(PreTrainedTokenizer):
 
     def _tokenize(self, text):
         """Tokenize a string. Returns a list of BPE tokens."""
-        return self.sp.encode(text, out_type=str)
+        def text_to_byte_seq(text):
+            return "".join([chr(c) for c in text.encode("utf-8")])
+        return self.sp.encode(text_to_byte_seq(text), out_type=str)
     
     def tokenize_batch(self, examples):
         if isinstance(examples, str):
@@ -603,6 +611,7 @@ class ChineseBPETokenizer(PreTrainedTokenizer):
         eos_token="</s>",
         pad_token="<pad>",
         add_bos_token=False,
+        input_method="pinyin_tone_above",
         **kwargs,
     ):
         # Hardcoded since sentencepiece uses these special tokens
@@ -613,6 +622,7 @@ class ChineseBPETokenizer(PreTrainedTokenizer):
         
         self.add_bos_token = add_bos_token
         self.n_positions = n_positions
+        self.input_method = input_method
 
         # Load spm vocab and merges
         self.sp = spm.SentencePieceProcessor()
@@ -628,6 +638,51 @@ class ChineseBPETokenizer(PreTrainedTokenizer):
             **kwargs,
         )
 
+    @staticmethod
+    def _pretokenize(text, input_method):
+        """Converts a text in Chinese into its input representation."""
+
+        def get_stroke_dict(file_path):
+            """Returns a dict mapping character to wubi/cangjie code from yaml file."""
+            stroke_dict = {}
+            parsing = False
+
+            with open(file_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line == "...":
+                        parsing = True
+                        continue
+                    if not parsing or line.startswith("#") or not line:
+                        continue
+                    match = re.match(r"(\S+)\s+(\S+)", line)
+                    if match:
+                        char, code = match.groups()
+                        if char not in stroke_dict:
+                            stroke_dict[char] = code
+            return stroke_dict
+        
+        if input_method == "pinyin_tone_above":
+            # nǐ#hǎo#，#wǒ#shì#xiǎo#bái
+            pretokenized = pinyin(text, style=Style.TONE, heteronym=False)
+            return "#".join(["".join(word) for word in pretokenized])
+        elif input_method == "pinyin_tone_after":
+            # ni3#hao3#，#wo3#shi4#xiao3#bai2
+            pretokenized = pinyin(text, style=Style.TONE3, heteronym=False)
+            return "#".join(["".join(word) for word in pretokenized])
+        elif input_method == "zhuyin":
+            # ㄋㄧˇ#ㄏㄠˇ#，#ㄨㄛˇ#ㄕˋ#ㄒㄧㄠˇ#ㄅㄞˊ#
+            pretokenized = pinyin(text, style=Style.BOPOMOFO, heteronym=False)
+            return "#".join(["".join(word) for word in pretokenized])
+        elif input_method == "wubi":
+            wubi_dict = get_stroke_dict("/mnt/storage/ntunggal/wubi86.dict.yaml")
+            return "#".join([wubi_dict.get(char, char) for char in text])
+        elif input_method == "cangjie":
+            cangjie_dict = get_stroke_dict("/mnt/storage/ntunggal/cangjie5.dict.yaml")
+            return "#".join([cangjie_dict.get(char, char) for char in text])
+        else:
+            raise ValueError(f"Received invalid input_method: {input_method}.")
+    
     @classmethod
     def create_vocab(
         cls, 
@@ -638,8 +693,7 @@ class ChineseBPETokenizer(PreTrainedTokenizer):
         max_vocab_size=50257, 
         max_examples=None,
         model_prefix="chinese_bpe",
-        input_method="pinyin",
-        delimiter="#",
+        input_method="pinyin_tone_above",
         disambiguate=False,
     ):
         """
@@ -653,25 +707,7 @@ class ChineseBPETokenizer(PreTrainedTokenizer):
             max_vocab_size: Max vocabulary size.
             max_examples: Number of examples to use for training.
             model_prefix: Prefix for the SentencePiece model file.
-        """
-        def pretokenize(text, input_method, delimiter, disambiguate):
-            if input_method == "pinyin":
-                # nǐ#hǎo#，#wǒ#shì#xiǎo#bái
-                pretokenized = pinyin(text, style=Style.TONE, heteronym=False)
-                return f"{delimiter}".join(["".join(word) for word in pretokenized])
-            elif input_method == "zhuyin":
-                # ㄋㄧˇ#ㄏㄠˇ#，#ㄨㄛˇ#ㄕˋ#ㄒㄧㄠˇ#ㄅㄞˊ#
-                pretokenized = pinyin(text, style=Style.BOPOMOFO, heteronym=False)
-                return f"{delimiter}".join(["".join(word) for word in pretokenized])
-            elif input_method == "wubi":
-                pass
-            elif input_method == "cangjie":
-                pass
-            elif input_method == "zhengma":
-                pass
-            else:
-                raise ValueError(f"Received unknown input_method: {input_method}.")
-        
+        """        
         os.makedirs(save_directory, exist_ok=True)
         temp_file = os.path.join(save_directory, "temp_text.txt")
         
@@ -679,7 +715,7 @@ class ChineseBPETokenizer(PreTrainedTokenizer):
             for i, example in enumerate(train_dataset, start=1):
                 text = example[text_field].strip()
                 if text:
-                    f.write(pretokenize(text, input_method, delimiter, disambiguate) + "\n")
+                    f.write(cls._pretokenize(text, input_method) + "\n")
                 if max_examples is not None and i >= max_examples:
                     break
         
@@ -692,6 +728,8 @@ class ChineseBPETokenizer(PreTrainedTokenizer):
             user_defined_symbols=special_tokens,
             character_coverage=1.0,
             model_type="bpe",
+            max_sentence_length=16384,
+            split_by_unicode_script=False,
         )
 
         # Create and save vocab.json
@@ -714,6 +752,7 @@ class ChineseBPETokenizer(PreTrainedTokenizer):
 
     def _tokenize(self, text):
         """Tokenize a string. Returns a list of BPE tokens."""
+        text = self._pretokenize(text, self.input_method)
         return self.sp.encode(text, out_type=str)
     
     def tokenize_batch(self, examples):
