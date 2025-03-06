@@ -1,0 +1,6 @@
+Word Embeddings: 199680
+Position Embeddings: 786432
+Layer Normalization: 19968
+Self-Attention: 10630656
+Feed-Forward Network: 31878144
+Total parameter count: 43514880
