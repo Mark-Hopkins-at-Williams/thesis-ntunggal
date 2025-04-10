@@ -33,61 +33,29 @@ with open(join(experiment_dir, 'experiment.json')) as reader:
 tokenizer_config = experiment_config['tokenizer']
 model_config = experiment_config['model']
 training_config = experiment_config['training']
+
+Tokenizer = TOKENIZERS[tokenizer_config['name']]
+save_directory = tokenizer_config['tokenizer_files_dir']
+
 checkpoints_dir = join(experiment_dir, "checkpoints")
 logging_dir = join(experiment_dir, "logs")
 os.makedirs(checkpoints_dir, exist_ok=True)
 os.makedirs(logging_dir, exist_ok=True)
 
-# Set the tokenizer from config
-print(f"Tokenizer: {tokenizer_config['name']}", flush=True)
-input_method = tokenizer_config['input_method']
-assert input_method in ['pinyin_tone_above', 'pinyin_tone_after', 'zhuyin', 'wubi', 'cangjie', '']
-if tokenizer_config['name'] in ["ChineseBPETokenizer", "RepackagedByteTokenizer"]:
-    print(f"Input method: {input_method}", flush=True)
-Tokenizer = TOKENIZERS[tokenizer_config['name']]
-max_vocab_size = tokenizer_config['max_vocab_size']
-max_examples = tokenizer_config['max_examples'] if tokenizer_config['max_examples'] != "" else None
-special_tokens = tokenizer_config['special_tokens']
-save_directory = tokenizer_config['tokenizer_files_dir']
-vocab_file_path = join(save_directory, tokenizer_config['vocab_file_name'])
-
-# Load dataset and vocab files
+# Load dataset
 print("Loading dataset...", flush=True)
 train_dataset, validation_dataset, entropy = load_baai_data()
+
+# Create vocab if needed
 if save_directory != "" and not os.path.exists(save_directory):
-    print("Creating vocab and merges...", flush=True)
-    
-    # TODO: fix hardcoding (set to pinyin-after-bpe)
-    if tokenizer_config['name'] == "RepackagedByteTokenizer":
-        Tokenizer.create_vocab(train_dataset, 
-                           save_directory, 
-                           special_tokens=list(special_tokens.values()), 
-                           max_vocab_size=max_vocab_size, 
-                           max_examples=max_examples,
-                           input_method=input_method,
-                           sp_path="/mnt/storage/ntunggal/tokenizer-files/pinyin-after-bpe/chinese_bpe.model")
-    else:
-        Tokenizer.create_vocab(train_dataset, 
-                           save_directory, 
-                           special_tokens=list(special_tokens.values()), 
-                           max_vocab_size=max_vocab_size, 
-                           max_examples=max_examples,
-                           input_method=input_method)
+    print("Creating vocab...", flush=True)
+    Tokenizer.create_vocab_from_config(train_dataset, tokenizer_config)
 
-# Create the tokenizer
+# Instantiate tokenizer
 print("Creating tokenizer...", flush=True)
-tokenizer_kwargs = {
-    'vocab_file': vocab_file_path,
-    'n_positions': model_config['n_positions'],
-}
-for key in ['unk_token', 'bos_token', 'eos_token', 'pad_token']:
-    if key in special_tokens:
-        tokenizer_kwargs[key] = special_tokens[key]
-if input_method != '':
-    tokenizer_kwargs['input_method'] = input_method
+tokenizer = Tokenizer.from_config(tokenizer_config)
 
-tokenizer = Tokenizer(**tokenizer_kwargs)
-
+# Log tokenizer info
 print(f"len(tokenizer): {len(tokenizer)}")
 print(f"tokenizer.unk_token_id: {tokenizer.unk_token_id}")
 print(f"tokenizer.bos_token_id: {tokenizer.bos_token_id}")

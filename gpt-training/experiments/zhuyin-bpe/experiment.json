@@ -1,7 +1,7 @@
 {
     "tokenizer": {
         "name": "ChineseBPETokenizer",
-        "max_vocab_size": 50267,
+        "max_vocab_size": 50257,
         "max_examples": 1000000,
         "special_tokens": {
             "pad_token": "<pad>"

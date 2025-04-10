@@ -7,6 +7,7 @@ from transformers import AddedToken, PreTrainedTokenizer, logging
 import sentencepiece as spm
 from pypinyin import pinyin, Style
 import re
+import pickle
 
 logger = logging.get_logger(__name__)
 
@@ -189,6 +190,14 @@ class CharacterTokenizer(PreTrainedTokenizer):
             f.write(json.dumps(self.encoder, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
 
         return (vocab_file,)
+    
+    @classmethod
+    def from_config(cls, config):
+        pass
+
+    @classmethod
+    def create_vocab_from_config(cls, train_data, config):
+        pass
 
 
 class SubwordBPETokenizer(PreTrainedTokenizer):
@@ -348,6 +357,14 @@ class SubwordBPETokenizer(PreTrainedTokenizer):
 
         return (vocab_file,)
     
+    @classmethod
+    def from_config(cls, config):
+        pass
+
+    @classmethod
+    def create_vocab_from_config(cls, train_data, config):
+        pass
+    
 
 class ByteTokenizer(PreTrainedTokenizer):
     """
@@ -454,6 +471,14 @@ class ByteTokenizer(PreTrainedTokenizer):
     # ByteTokenizer has no vocab file
     def save_vocabulary(self, save_directory: str, filename_prefix: Optional[str] = None) -> Tuple[str]:
         return ()
+    
+    @classmethod
+    def from_config(cls, config):
+        pass
+
+    @classmethod
+    def create_vocab_from_config(cls, train_data, config):
+        pass
     
 
 class ByteBPETokenizer(PreTrainedTokenizer):
@@ -596,6 +621,14 @@ class ByteBPETokenizer(PreTrainedTokenizer):
     def save_vocabulary(self, save_directory: str, filename_prefix: Optional[str] = None) -> Tuple[str]:
         return ()
     
+    @classmethod
+    def from_config(cls, config):
+        pass
+
+    @classmethod
+    def create_vocab_from_config(cls, train_data, config):
+        pass
+    
 
 class ChineseBPETokenizer(PreTrainedTokenizer):
     """
@@ -662,14 +695,20 @@ class ChineseBPETokenizer(PreTrainedTokenizer):
                             stroke_dict[char] = code
             return stroke_dict
         
+        number_to_circle = {'1': '①', '2': '②', '3': '③', '4': '④'}
+        def replace_tone(syllable):
+            if syllable[-1] in number_to_circle:
+                return syllable[:-1] + number_to_circle[syllable[-1]]
+            return syllable
+        
         if input_method == "pinyin_tone_above":
             # nǐ#hǎo#，#wǒ#shì#xiǎo#bái
             pretokenized = pinyin(text, style=Style.TONE, heteronym=False)
             return "#".join(["".join(word) for word in pretokenized])
         elif input_method == "pinyin_tone_after":
-            # ni3#hao3#，#wo3#shi4#xiao3#bai2
+            # ni③#hao③#，#wo③#shi④#xiao③#bai②#
             pretokenized = pinyin(text, style=Style.TONE3, heteronym=False)
-            return "#".join(["".join(word) for word in pretokenized])
+            return "#".join(["".join(replace_tone(word) for word in group) for group in pretokenized])
         elif input_method == "zhuyin":
             # ㄋㄧˇ#ㄏㄠˇ#，#ㄨㄛˇ#ㄕˋ#ㄒㄧㄠˇ#ㄅㄞˊ#
             pretokenized = pinyin(text, style=Style.BOPOMOFO, heteronym=False)
@@ -678,6 +717,7 @@ class ChineseBPETokenizer(PreTrainedTokenizer):
             wubi_dict = get_stroke_dict("/mnt/storage/ntunggal/wubi86.dict.yaml")
             return "#".join([wubi_dict.get(char, char) for char in text])
         elif input_method == "cangjie":
+            # file does not exist
             cangjie_dict = get_stroke_dict("/mnt/storage/ntunggal/cangjie5.dict.yaml")
             return "#".join([cangjie_dict.get(char, char) for char in text])
         else:
@@ -693,8 +733,7 @@ class ChineseBPETokenizer(PreTrainedTokenizer):
         max_vocab_size=50257, 
         max_examples=None,
         model_prefix="chinese_bpe",
-        input_method="pinyin_tone_above",
-        disambiguate=False,
+        input_method="pinyin_tone_above"
     ):
         """
         Creates a SentencePiece model and saves vocab.json and spm.model.
@@ -780,3 +819,271 @@ class ChineseBPETokenizer(PreTrainedTokenizer):
 
     def save_vocabulary(self, save_directory: str, filename_prefix: Optional[str] = None) -> Tuple[str]:
         return ()
+    
+    @classmethod
+    def from_config(cls, config):
+        pass
+
+    @classmethod
+    def create_vocab_from_config(cls, train_data, config):
+        pass
+    
+
+class RepackagedByteTokenizer(PreTrainedTokenizer):
+    """
+    Construct a repackaged UTF-8 byte tokenizer. Maps single tokens to UTF-8 byte representations.
+    """
+    
+    def __init__(
+        self,
+        vocab_file,
+        n_positions,
+        unk_token="<unk>",
+        bos_token="<s>",
+        eos_token="</s>",
+        pad_token="<pad>",
+        input_method="pinyin_tone_above",
+        **kwargs,
+    ):
+        bos_token = AddedToken(bos_token, lstrip=False, rstrip=False)
+        eos_token = AddedToken(eos_token, lstrip=False, rstrip=False)
+        unk_token = AddedToken(unk_token, lstrip=False, rstrip=False)
+        pad_token = AddedToken(pad_token, lstrip=False, rstrip=False)
+        
+        self.n_positions = n_positions
+        self._added_tokens_decoder = {0: pad_token, 1: bos_token, 2: eos_token, 3: unk_token}
+        self.offset = len(self._added_tokens_decoder)
+        self._utf_vocab_size = 2**8
+        self.input_method = input_method
+        
+        with open(vocab_file, "rb") as f:
+            self.remapped_utf8 = pickle.load(f)
+            
+        super().__init__(
+            unk_token=unk_token,
+            bos_token=bos_token,
+            eos_token=eos_token,
+            pad_token=pad_token,
+            **kwargs,
+        )
+
+    @staticmethod
+    def _pretokenize(text, input_method):
+        """Returns a string of text converted from Chinese to its input representation."""
+
+        def get_stroke_dict(file_path):
+            """Returns a dict mapping character to wubi/cangjie code from yaml file."""
+            stroke_dict = {}
+            parsing = False
+
+            with open(file_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line == "...":
+                        parsing = True
+                        continue
+                    if not parsing or line.startswith("#") or not line:
+                        continue
+                    match = re.match(r"(\S+)\s+(\S+)", line)
+                    if match:
+                        char, code = match.groups()
+                        if char not in stroke_dict:
+                            stroke_dict[char] = code
+            return stroke_dict
+        
+        number_to_circle = {'1': '①', '2': '②', '3': '③', '4': '④'}
+        def replace_tone(syllable):
+            """Helper function to tone indicators 1234 to ①②③④."""
+            if syllable[-1] in number_to_circle:
+                return syllable[:-1] + number_to_circle[syllable[-1]]
+            return syllable
+        
+        if input_method == "pinyin_tone_above":
+            # nǐ#hǎo#，#wǒ#shì#xiǎo#bái
+            pretokenized = pinyin(text, style=Style.TONE, heteronym=False)
+            return "#".join(["".join(word) for word in pretokenized])
+        elif input_method == "pinyin_tone_after":
+            # ni③#hao③#，#wo③#shi④#xiao③#bai②
+            pretokenized = pinyin(text, style=Style.TONE3, heteronym=False)
+            return "#".join(["".join(replace_tone(word) for word in group) for group in pretokenized])
+        elif input_method == "zhuyin":
+            # ㄋㄧˇ#ㄏㄠˇ#，#ㄨㄛˇ#ㄕˋ#ㄒㄧㄠˇ#ㄅㄞˊ#
+            pretokenized = pinyin(text, style=Style.BOPOMOFO, heteronym=False)
+            return "#".join(["".join(word) for word in pretokenized])
+        elif input_method == "wubi":
+            wubi_dict = get_stroke_dict("/mnt/storage/ntunggal/wubi86.dict.yaml")
+            return "#".join([wubi_dict.get(char, char) for char in text])
+        elif input_method == "cangjie":
+            # file does not exist
+            cangjie_dict = get_stroke_dict("/mnt/storage/ntunggal/cangjie5.dict.yaml")
+            return "#".join([cangjie_dict.get(char, char) for char in text])
+        else:
+            raise ValueError(f"Received invalid input_method: {input_method}.")
+    
+    @classmethod
+    def create_vocab(
+        cls, 
+        train_dataset, 
+        save_directory, 
+        special_tokens=[], 
+        text_field="text", 
+        max_vocab_size=50257, 
+        max_examples=None,
+        model_prefix="repackaged_byte_tokenizer",
+        input_method="",
+        sp_path=""
+    ):
+        """
+        Repurposed to create and save a dictionary mapping tokens to new
+        UTF-8 representations.
+
+        Useful args:
+            train_dataset: Dataset to create vocab from.
+            save_directory: Directory to save remapped UTF-8 file.
+            text_field: Field containing text data in the dataset.
+            max_examples: Number of examples to use for training.
+            input_method: Input method to pretokenize by.
+            sp_path: Path to SentencePiece model file for getting pretokenized tokens. 
+        """
+        def get_pretokens(text):
+            """Tokenizes pretokenized text into a list of its pretokens."""
+            sp = spm.SentencePieceProcessor()
+            sp.load(sp_path)
+            return sp.encode(text, out_type=str)
+
+        # Count pretokens in pretokenized text
+        tk_counts = Counter()
+        for i, example in enumerate(train_dataset, start=1):
+            text = example[text_field].strip()
+            if text:
+                pretokenized_text = cls._pretokenize(text, input_method)
+                assert sp_path
+                pretokens = get_pretokens(pretokenized_text)
+                tk_counts.update(pretokens)
+            if max_examples is not None and i >= max_examples:
+                break
+        
+        # Assign tokens to UTF-8 representations in freq order
+        tk_list = [tok for tok, count in tk_counts.most_common()]
+        tk_iter = iter(tk_list)
+        remapped_dict = {}
+
+        # Helper function to assign UTF-8
+        def assign_mapping(r):
+            try:
+                tok = next(tk_iter)
+                remapped_dict[tok] = r
+                return True
+            except StopIteration:
+                return False # Ran out of tokens to map
+
+        # In a function to make breaks easier 
+        def do_remapping():
+            # 1-byte
+            for b1 in range(0x20, 0x80):  
+                if not assign_mapping(chr(b1)): return
+
+            # 2-byte
+            for b1 in range(0xC2, 0xE0):  
+                for b2 in range(0x80, 0xC0):
+                    if not assign_mapping(chr(b1) + chr(b2)): return
+
+            # 3-byte
+            for b1 in range(0xE0, 0xF0):
+                for b2 in range(0x80, 0xC0):
+                    if b1 == 0xE0 and b2 < 0xA0: continue
+                    if b1 == 0xED and b2 >= 0xA0: continue
+                    for b3 in range(0x80, 0xC0):
+                        if not assign_mapping(chr(b1) + chr(b2) + chr(b3)): return
+
+            # 4-byte
+            for b1 in range(0xF0, 0xF5):
+                for b2 in range(0x80, 0xC0):
+                    if b1 == 0xF0 and b2 < 0x90: continue
+                    if b1 == 0xF4 and b2 >= 0x90: continue
+                    for b3 in range(0x80, 0xC0):
+                        for b4 in range(0x80, 0xC0):
+                            if not assign_mapping(chr(b1) + chr(b2) + chr(b3) + chr(b4)): return
+        
+        do_remapping()
+    
+        # Save remapped_dict to file using pickle
+        os.makedirs(save_directory, exist_ok=True)
+        remapping_file = os.path.join(save_directory, "remapped_utf8_byte.pkl")
+        with open(remapping_file, "wb") as f:
+            pickle.dump(remapped_dict, f)
+        return
+    
+    @property
+    def vocab_size(self):
+        # Special tokens handled separately
+        return self._utf_vocab_size
+
+    def get_vocab(self):
+        vocab = {self.convert_ids_to_tokens(i): i for i in range(self.vocab_size + self.offset)}
+        vocab.update(self.added_tokens_encoder)
+        return vocab
+
+    def _tokenize(self, text):
+        """Tokenize a string. Returns a list of strings (tokens)."""
+        pretokenized_text = self._pretokenize(text, self.input_method)
+        tokens = [self.remapped_utf8.get(tok, self.unk_token) for tok in pretokenized_text]
+        return tokens
+    
+    def tokenize_batch(self, examples):
+        if isinstance(examples, str):
+            texts = [examples]
+        else:
+            texts = examples["text"]
+        tokenized = self(
+            texts, 
+            padding="max_length", 
+            truncation=True, 
+            max_length=self.n_positions, 
+            return_tensors=None
+        )
+        tokenized["labels"] = tokenized["input_ids"].copy()
+        return tokenized
+
+    def _convert_token_to_id(self, token):
+        """Converts a token (str) in an id using the vocab."""
+        if len(token) != 1:
+            token_id = None
+        else:
+            token_id = ord(token) + self.offset
+        return token_id
+
+    def _convert_id_to_token(self, index):
+        """Converts an index (integer) in a token (str) using the vocab."""
+        token = chr(index - self.offset)
+        return token
+
+    # RepackagedByteTokenizer has no traditional vocab file
+    def save_vocabulary(self, save_directory: str, filename_prefix: Optional[str] = None) -> Tuple[str]:
+        return ()
+    
+    @classmethod
+    def from_config(cls, config):
+        kwargs = {
+            'vocab_file': os.path.join(config['tokenizer_files_dir'], config['vocab_file_name']),
+            'n_positions': config['n_positions']
+        }
+        for token in ['unk_token', 'bos_token', 'eos_token', 'pad_token']:
+            if token in config['special_tokens']:
+                kwargs[token] = config['special_tokens'][token]
+        if config.get('input_method'):
+            kwargs['input_method'] = config['input_method']
+        return cls(**kwargs)
+
+    @classmethod
+    def create_vocab_from_config(cls, train_data, config):
+        sp_path = config.get('sp_path')  # assert or handle fallback
+        return cls.create_vocab(
+            train_data,
+            save_directory=config['tokenizer_files_dir'],
+            special_tokens=list(config['special_tokens'].values()),
+            max_vocab_size=config.get('max_vocab_size', ''),
+            max_examples=config.get('max_examples', ''),
+            input_method=config.get('input_method', ''),
+            sp_path=sp_path,
+        )

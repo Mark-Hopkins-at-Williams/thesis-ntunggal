@@ -1,7 +1,7 @@
 {
     "tokenizer": {
         "name": "CharacterTokenizer",
-        "max_vocab_size": 50267,
+        "max_vocab_size": 50257,
         "max_examples": "",
         "special_tokens": {
             "unk_token": "<unk>",
@@ -10,7 +10,8 @@
             "pad_token": "<pad>"
         },
         "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/character",
-        "vocab_file_name": "vocab.json"
+        "vocab_file_name": "vocab.json",
+        "input_method": ""
     },
     "model": {
         "n_positions": 1024,

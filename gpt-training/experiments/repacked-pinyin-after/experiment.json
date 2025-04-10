@@ -1,14 +1,14 @@
 {
     "tokenizer": {
-        "name": "ByteBPETokenizer",
-        "max_vocab_size": 50257,
-        "max_examples": 1000000,
+        "name": "RepackagedByteTokenizer",
+        "max_vocab_size": "",
+        "max_examples": 100,
         "special_tokens": {
             "pad_token": "<pad>"
         },
-        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/byte-bpe",
-        "vocab_file_name": "byte_bpe.model",
-        "input_method": ""
+        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/repacked-pinyin-after",
+        "vocab_file_name": "remapped_utf8_byte.pkl",
+        "input_method": "pinyin_tone_after"
     },
     "model": {
         "n_positions": 1024,
