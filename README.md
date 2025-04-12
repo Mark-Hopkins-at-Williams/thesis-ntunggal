@@ -132,4 +132,4 @@ This class is multiple tokenizers packed into one class. There are set options f
     - tokenizer_files_dir: (path to directory to store `vocab.json`, `chinese_bpe.model`, `chinese_bpe.vocab`)
     - vocab_file_name: (actual name of vocab file, ex. `chinese_bpe.model`)
     - input_method: "pinyin_tone_above" or "pinyin_tone_after" or "zhuyin" or "wubi" or "cangjie"
-    - sp_file: (path to a `.model` file corresponding to the input method selected)
+    - sp_path: (path to a SentencePiece `.model` file corresponding to the input method selected)

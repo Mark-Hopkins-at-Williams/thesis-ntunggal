@@ -8,7 +8,8 @@
         },
         "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/repacked-pinyin-after",
         "vocab_file_name": "remapped_utf8_byte.pkl",
-        "input_method": "pinyin_tone_after"
+        "input_method": "pinyin_tone_after",
+        "sp_path": ""
     },
     "model": {
         "n_positions": 1024,

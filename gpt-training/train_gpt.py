@@ -56,7 +56,7 @@ if save_directory != "" and not os.path.exists(save_directory):
 
 # Instantiate tokenizer
 print("Creating tokenizer...", flush=True)
-tokenizer = Tokenizer.from_config(tokenizer_config)
+tokenizer = Tokenizer.from_config(tokenizer_config, model_config['n_positions'])
 
 # Log tokenizer info
 print(f"len(tokenizer): {len(tokenizer)}")
@@ -67,9 +67,6 @@ print(f"tokenizer.pad_token_id: {tokenizer.pad_token_id}")
 
 print(f"tokenizer.tokenize(你好,最近怎么样？): {tokenizer.tokenize('你好,最近怎么样？')}")
 #print(f"tokenizer.remapped_utf8: {tokenizer.remapped_utf8}")
-
-# TODO: currently testing wubi and cangjie
-exit()
 
 config = GPT2Config(
     vocab_size=len(tokenizer),        # Vocabulary size

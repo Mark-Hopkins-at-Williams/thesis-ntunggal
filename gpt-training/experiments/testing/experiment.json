@@ -6,7 +6,7 @@
         "special_tokens": {
             "pad_token": "<pad>"
         },
-        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/wubi-bpe-test",
+        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files-test/wubi-bpe-test",
         "vocab_file_name": "chinese_bpe.model",
         "input_method": "wubi"
     },
