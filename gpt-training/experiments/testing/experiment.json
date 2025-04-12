@@ -1,14 +1,14 @@
 {
     "tokenizer": {
         "name": "ChineseBPETokenizer",
-        "max_vocab_size": 616,
-        "max_examples": 10,
+        "max_vocab_size": 2000,
+        "max_examples": 100,
         "special_tokens": {
             "pad_token": "<pad>"
         },
-        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/zhuyin-bpe-test",
+        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/wubi-bpe-test",
         "vocab_file_name": "chinese_bpe.model",
-        "input_method": "zhuyin"
+        "input_method": "wubi"
     },
     "model": {
         "n_positions": 1024,
