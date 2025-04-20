@@ -7,7 +7,6 @@ from transformers import GPT2TokenizerFast
 from transformers import AddedToken, PreTrainedTokenizer, logging
 import sentencepiece as spm
 from pypinyin import pinyin, Style
-import re
 import pickle
 
 logger = logging.get_logger(__name__)
@@ -122,28 +121,31 @@ class CustomTokenizerBase(PreTrainedTokenizer, ABC):
 class ChineseTokenizerBase(CustomTokenizerBase):
     
     @staticmethod
-    def _pretokenize(text, input_method):
+    def get_stroke_dict(file_path):
+        """Returns a dict mapping character to wubi/cangjie code from yaml file."""
+        stroke_dict = {}
+        parsing = False
+
+        with open(file_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line == "...":
+                    parsing = True
+                    continue
+                if not parsing or line.startswith("#") or not line:
+                    continue
+                
+                parts = line.split()
+                if len(parts) >= 2:
+                    char = parts[0]
+                    code = parts[1]
+                    if char not in stroke_dict:
+                        stroke_dict[char] = code
+        return stroke_dict
+    
+    @staticmethod
+    def _pretokenize(text, input_method, stroke_dict=None):
         """Converts a text in Chinese into its input representation."""
-
-        def get_stroke_dict(file_path):
-            """Returns a dict mapping character to wubi/cangjie code from yaml file."""
-            stroke_dict = {}
-            parsing = False
-
-            with open(file_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line == "...":
-                        parsing = True
-                        continue
-                    if not parsing or line.startswith("#") or not line:
-                        continue
-                    match = re.match(r"(\S+)\s+(\S+)", line)
-                    if match:
-                        char, code = match.groups()
-                        if char not in stroke_dict:
-                            stroke_dict[char] = code
-            return stroke_dict
         
         number_to_circle = {'1': '①', '2': '②', '3': '③', '4': '④'}
         def replace_tone(syllable):
@@ -164,23 +166,29 @@ class ChineseTokenizerBase(CustomTokenizerBase):
             pretokenized = pinyin(text, style=Style.BOPOMOFO, heteronym=False)
             return "#".join(["".join(word) for word in pretokenized])
         elif input_method == "wubi":
-            wubi_dict = get_stroke_dict("/mnt/storage/ntunggal/wubi86.dict.yaml")
-            return "#".join([wubi_dict.get(char, char) for char in text])
+            assert stroke_dict
+            return "#".join([stroke_dict.get(char, char) for char in text])
         elif input_method == "cangjie":
-            # file does not exist
-            cangjie_dict = get_stroke_dict("/mnt/storage/ntunggal/cangjie5.dict.yaml")
-            return "#".join([cangjie_dict.get(char, char) for char in text])
+            assert stroke_dict
+            return "#".join([stroke_dict.get(char, char) for char in text])
         else:
             raise ValueError(f"Received invalid input_method: {input_method}.")
         
     @classmethod
     def from_config(cls, config, n_positions):
-        obj = super().from_config(config, n_positions)
-        if hasattr(obj, 'input_method') and config.get('input_method') in [
-            'pinyin_tone_above', 'pinyin_tone_after', 'zhuyin', 'wubi', 'cangjie', ''
-        ]:
-            obj.input_method = config['input_method']
-        return obj
+        kwargs = {
+            'vocab_file': os.path.join(config['tokenizer_files_dir'], config['vocab_file_name']),
+            'n_positions': n_positions
+        }
+        for token in ['unk_token', 'bos_token', 'eos_token', 'pad_token']:
+            if token in config['special_tokens']:
+                kwargs[token] = config['special_tokens'][token]
+        input_method = config['input_method']
+        if input_method in ['pinyin_tone_above', 'pinyin_tone_after', 'zhuyin', 'wubi', 'cangjie']:
+            kwargs['input_method'] = input_method
+        else:
+            raise ValueError(f"Received invalid input_method: {input_method}.")
+        return cls(**kwargs)
     
     @classmethod
     def create_vocab_from_config(cls, train_data, config):
@@ -238,10 +246,9 @@ class CharacterTokenizer(CustomTokenizerBase):
         train_dataset, 
         save_directory, 
         special_tokens=[], 
-        text_field="text", 
         max_vocab_size=50257, 
         max_examples=None,
-        model_prefix="char_tokenizer",
+        model_prefix="",
         input_method="",
     ):
         """
@@ -251,14 +258,13 @@ class CharacterTokenizer(CustomTokenizerBase):
             train_dataset: Dataset to create vocab from.
             save_directory: Directory to save spm.model and vocab.json.
             special_tokens: List of special tokens to include.
-            text_field: Field containing text data in the dataset.
             max_vocab_size: Max vocabulary size.
             max_examples: Number of examples to use for training.
             model_prefix: Prefix for the SentencePiece model file.
         """
         char_counter = Counter()
         for i, example in enumerate(train_dataset, start=1):
-            text = example[text_field]
+            text = example["text"]
             text = text.replace("\u2028", "").replace("\u2029", "")
             char_counter.update(text)
             if (max_examples is not None and i >= max_examples) or len(char_counter) >= max_vocab_size:
@@ -351,7 +357,6 @@ class SubwordBPETokenizer(CustomTokenizerBase):
         train_dataset, 
         save_directory, 
         special_tokens=[], 
-        text_field="text", 
         max_vocab_size=50257, 
         max_examples=None,
         model_prefix="bpe_tokenizer",
@@ -364,7 +369,6 @@ class SubwordBPETokenizer(CustomTokenizerBase):
             train_dataset: Dataset to create vocab from.
             save_directory: Directory to save spm.model and vocab.json.
             special_tokens: List of special tokens to include.
-            text_field: Field containing text data in the dataset.
             max_vocab_size: Max vocabulary size.
             max_examples: Number of examples to use for training.
             model_prefix: Prefix for the SentencePiece model file.
@@ -374,7 +378,7 @@ class SubwordBPETokenizer(CustomTokenizerBase):
         
         with open(temp_file, "w", encoding="utf-8") as f:
             for i, example in enumerate(train_dataset, start=1):
-                text = example[text_field].strip()
+                text = example["text"].strip()
                 if text:
                     f.write(text + "\n")
                 if max_examples is not None and i >= max_examples:
@@ -389,6 +393,9 @@ class SubwordBPETokenizer(CustomTokenizerBase):
             user_defined_symbols=special_tokens,
             character_coverage=0.9995,
             model_type="bpe",
+            max_sentence_length=32768,
+            split_by_unicode_script=False,
+            normalization_rule_name='identity',
         )
 
         # Create and save vocab.json
@@ -535,7 +542,6 @@ class ByteBPETokenizer(CustomTokenizerBase):
         train_dataset, 
         save_directory, 
         special_tokens=[], 
-        text_field="text", 
         max_vocab_size=50257, 
         max_examples=None,
         model_prefix="byte_bpe",
@@ -548,7 +554,6 @@ class ByteBPETokenizer(CustomTokenizerBase):
             train_dataset: Dataset to create vocab from.
             save_directory: Directory to save spm.model and vocab.json.
             special_tokens: List of special tokens to include.
-            text_field: Field containing text data in the dataset.
             max_vocab_size: Max vocabulary size.
             max_examples: Number of examples to use for training.
             model_prefix: Prefix for the SentencePiece model file.
@@ -561,7 +566,7 @@ class ByteBPETokenizer(CustomTokenizerBase):
         
         with open(temp_file, "w", encoding="utf-8") as f:
             for i, example in enumerate(train_dataset, start=1):
-                text = example[text_field].strip()
+                text = example["text"].strip()
                 if text:
                     f.write(text_to_byte_seq(text) + "\n")
                 if max_examples is not None and i >= max_examples:
@@ -576,8 +581,9 @@ class ByteBPETokenizer(CustomTokenizerBase):
             user_defined_symbols=special_tokens,
             character_coverage=1.0,
             model_type="bpe",
-            max_sentence_length=16384,
+            max_sentence_length=32768,
             split_by_unicode_script=False,
+            normalization_rule_name='identity',
         )
 
         # Create and save vocab.json
@@ -612,7 +618,7 @@ class ChineseBPETokenizer(ChineseTokenizerBase):
         eos_token="</s>",
         pad_token="<pad>",
         add_bos_token=False,
-        input_method="pinyin_tone_above",
+        input_method=None,
         **kwargs,
     ):
         # Hardcoded since sentencepiece uses these special tokens
@@ -621,9 +627,20 @@ class ChineseBPETokenizer(ChineseTokenizerBase):
         unk_token = AddedToken("<unk>", lstrip=False, rstrip=False)
         pad_token = AddedToken(pad_token, lstrip=False, rstrip=False)
         
+        assert input_method in ['pinyin_tone_above', 'pinyin_tone_after', 'zhuyin', 'wubi', 'cangjie']
         self.add_bos_token = add_bos_token
         self.n_positions = n_positions
         self.input_method = input_method
+
+        # Load dictionaries for wubi and cangjie
+        # TODO: fix path mess
+        self.stroke_dict = None
+        if self.input_method == "wubi":
+            #stroke_dict = __class__.get_stroke_dict("/mnt/storage/ntunggal/wubi86.dict.yaml")
+            self.stroke_dict = __class__.get_stroke_dict("wubi86-components.dict.yaml")
+        elif self.input_method == "cangjie":
+            #stroke_dict = __class__.get_stroke_dict("/mnt/storage/ntunggal/cangjie5.dict.yaml")
+            self.stroke_dict = __class__.get_stroke_dict("cangjie5-components.dict.yaml")
 
         # Load spm vocab and merges
         self.sp = spm.SentencePieceProcessor()
@@ -646,11 +663,10 @@ class ChineseBPETokenizer(ChineseTokenizerBase):
         train_dataset, 
         save_directory, 
         special_tokens=[], 
-        text_field="text", 
         max_vocab_size=50257, 
         max_examples=None,
         model_prefix="chinese_bpe",
-        input_method="pinyin_tone_above"
+        input_method=None,
     ):
         """
         Creates a SentencePiece model and saves vocab.json and spm.model.
@@ -659,20 +675,26 @@ class ChineseBPETokenizer(ChineseTokenizerBase):
             train_dataset: Dataset to create vocab from.
             save_directory: Directory to save spm.model and vocab.json.
             special_tokens: List of special tokens to include.
-            text_field: Field containing text data in the dataset.
             max_vocab_size: Max vocabulary size.
             max_examples: Number of examples to use for training.
             model_prefix: Prefix for the SentencePiece model file.
         """        
         os.makedirs(save_directory, exist_ok=True)
         temp_file = os.path.join(save_directory, "temp_text.txt")
+
+        assert input_method in ['pinyin_tone_above', 'pinyin_tone_after', 'zhuyin', 'wubi', 'cangjie']
+        stroke_dict = None
+        if input_method == "wubi":
+            #stroke_dict = cls.get_stroke_dict("/mnt/storage/ntunggal/wubi86.dict.yaml")
+            stroke_dict = cls.get_stroke_dict("wubi86-components.dict.yaml")
+        elif input_method == "cangjie":
+            #stroke_dict = cls.get_stroke_dict("/mnt/storage/ntunggal/cangjie5.dict.yaml")
+            stroke_dict = cls.get_stroke_dict("cangjie5-components.dict.yaml")
         
         with open(temp_file, "w", encoding="utf-8") as f:
-            # TODO: load wubi/cangjie dict ONCE so that it is faster
             for i, example in enumerate(train_dataset, start=1):
-                text = example[text_field].strip()
-                if text:
-                    f.write(cls._pretokenize(text, input_method) + "\n")
+                text = example["text"].strip()
+                f.write(cls._pretokenize(text, input_method, stroke_dict) + "\n")
                 if max_examples is not None and i >= max_examples:
                     break
         
@@ -685,8 +707,9 @@ class ChineseBPETokenizer(ChineseTokenizerBase):
             user_defined_symbols=special_tokens,
             character_coverage=1.0,
             model_type="bpe",
-            max_sentence_length=16384,
+            max_sentence_length=32768,
             split_by_unicode_script=False,
+            normalization_rule_name='identity',
         )
 
         # Create and save vocab.json
@@ -702,7 +725,7 @@ class ChineseBPETokenizer(ChineseTokenizerBase):
 
     def _tokenize(self, text):
         """Tokenize a string. Returns a list of BPE tokens."""
-        text = self._pretokenize(text, self.input_method)
+        text = self._pretokenize(text, self.input_method, self.stroke_dict)
         return self.sp.encode(text, out_type=str)
     
 
@@ -754,7 +777,6 @@ class RepackagedByteTokenizer(ChineseTokenizerBase):
         train_dataset, 
         save_directory, 
         special_tokens=[], 
-        text_field="text", 
         max_vocab_size=50257, 
         max_examples=None,
         model_prefix="repackaged_byte_tokenizer",
@@ -768,7 +790,6 @@ class RepackagedByteTokenizer(ChineseTokenizerBase):
         Useful args:
             train_dataset: Dataset to create vocab from.
             save_directory: Directory to save remapped UTF-8 file.
-            text_field: Field containing text data in the dataset.
             max_examples: Number of examples to use for training.
             input_method: Input method to pretokenize by.
             sp_path: Path to SentencePiece model file for getting pretokenized tokens. 
@@ -782,7 +803,7 @@ class RepackagedByteTokenizer(ChineseTokenizerBase):
         # Count pretokens in pretokenized text
         tk_counts = Counter()
         for i, example in enumerate(train_dataset, start=1):
-            text = example[text_field].strip()
+            text = example["text"].strip()
             if text:
                 pretokenized_text = cls._pretokenize(text, input_method)
                 assert sp_path
@@ -874,9 +895,21 @@ class RepackagedByteTokenizer(ChineseTokenizerBase):
 
     @classmethod
     def from_config(cls, config, n_positions):
-        obj = super().from_config(config, n_positions)
-        obj.sp_path = config['sp_path']
-        return obj
+        kwargs = {
+            'vocab_file': os.path.join(config['tokenizer_files_dir'], config['vocab_file_name']),
+            'n_positions': n_positions
+        }
+        for token in ['unk_token', 'bos_token', 'eos_token', 'pad_token']:
+            if token in config['special_tokens']:
+                kwargs[token] = config['special_tokens'][token]
+        input_method = config['input_method']
+        if input_method in ['pinyin_tone_above', 'pinyin_tone_after', 'zhuyin', 'wubi', 'cangjie']:
+            kwargs['input_method'] = input_method
+        else:
+            raise ValueError(f"Received invalid input_method: {input_method}.")
+        assert config['sp_path']
+        kwargs['sp_path'] = config['sp_path']
+        return cls(**kwargs)
     
     @classmethod
     def create_vocab_from_config(cls, train_data, config):

@@ -125,7 +125,7 @@ This class is multiple tokenizers packed into one class. There are set options f
 ### RepackagedBPETokenizer
 
 - tokenizer
-    - name: "ChineseBPETokenizer"
+    - name: "RepackagedBPETokenizer"
     - max_vocab_size: (any number)
     - max_examples: (any number) or "" for all
     - special_tokens: {"pad_token": "<pad>"}

@@ -3,6 +3,7 @@ import json
 import os
 from os.path import join
 import sys
+import math
 from tokenization import (CharacterTokenizer,
                           SubwordBPETokenizer,
                           ByteTokenizer,
@@ -104,7 +105,7 @@ class CustomTrainer(Trainer):
     def evaluate(self, eval_dataset=None, ignore_keys=None, metric_key_prefix="eval"):
         eval_results = super().evaluate(eval_dataset, ignore_keys, metric_key_prefix)
         loss_key = metric_key_prefix + "_loss"
-        loss = eval_results[loss_key]
+        loss = eval_results[loss_key] / math.log(2)
         entropy_ratio = (loss * num_validation_tokens) / entropy
         entropy_ratios.append(entropy_ratio)
         eval_results[metric_key_prefix + "_entropy_ratio"] = entropy_ratio      

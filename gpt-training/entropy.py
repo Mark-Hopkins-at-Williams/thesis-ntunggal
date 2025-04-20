@@ -18,6 +18,7 @@ def learn_unigram_model(sequences):
                 counts[char] = 0
             counts[char] += 1
         counts['</s>'] += 1
+    # Returns dict of character counts, normalized
     return normalize_counts(counts)
 
 def evaluate_unigram_model(model, sequences):
@@ -27,7 +28,7 @@ def evaluate_unigram_model(model, sequences):
         for char in seq:
             entropy += -math.log2(model[char])
             num_chars += 1
-        entropy += -math.log(model['</s>'])
+        entropy += -math.log2(model['</s>'])
         num_chars += 1
     return entropy
 
