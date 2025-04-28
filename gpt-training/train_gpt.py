@@ -66,9 +66,9 @@ print(f"tokenizer.bos_token_id: {tokenizer.bos_token_id}")
 print(f"tokenizer.eos_token_id: {tokenizer.eos_token_id}")
 print(f"tokenizer.pad_token_id: {tokenizer.pad_token_id}")
 
-print(f"tokenizer.tokenize(你好,最近怎么样？): {tokenizer.tokenize('你好,最近怎么样？')}")
+print(f"tokenizer.tokenize(你好,最近怎么样？): {tokenizer.tokenize('你好,最近怎么样?')}")
 #print(f"tokenizer.remapped_utf8: {tokenizer.remapped_utf8}")
-
+exit()
 config = GPT2Config(
     vocab_size=len(tokenizer),        # Vocabulary size
     n_positions=model_config['n_positions'],    # Maximum length of input sequences (in tokens)

@@ -1,20 +1,19 @@
 {
     "tokenizer": {
-        "name": "RepackagedByteTokenizer",
-        "max_vocab_size": "",
+        "name": "ChineseBPETokenizer",
+        "max_vocab_size": 50257,
         "max_examples": 1000000,
         "special_tokens": {
             "pad_token": "<pad>"
         },
-        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/repacked-pinyin-after",
-        "vocab_file_name": "remapped_utf8_byte.pkl",
-        "input_method": "pinyin_tone_after",
-        "sp_path": "/mnt/storage/ntunggal/tokenizer-files/pinyin-after-bpe/chinese_bpe.model"
+        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/wubi-component-bpe",
+        "vocab_file_name": "chinese_bpe.model",
+        "input_method": "wubi"
     },
     "model": {
         "n_positions": 1024,
         "n_ctx": 1024,
-        "n_embd": 1056,
+        "n_embd": 768,
         "n_layer": 6,
         "n_head": 12,
         "activation_function": "gelu"

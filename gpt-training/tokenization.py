@@ -636,10 +636,10 @@ class ChineseBPETokenizer(ChineseTokenizerBase):
         # TODO: fix path mess
         self.stroke_dict = None
         if self.input_method == "wubi":
-            #stroke_dict = __class__.get_stroke_dict("/mnt/storage/ntunggal/wubi86.dict.yaml")
+            #self.stroke_dict = __class__.get_stroke_dict("/mnt/storage/ntunggal/wubi86.dict.yaml")
             self.stroke_dict = __class__.get_stroke_dict("wubi86-components.dict.yaml")
         elif self.input_method == "cangjie":
-            #stroke_dict = __class__.get_stroke_dict("/mnt/storage/ntunggal/cangjie5.dict.yaml")
+            #self.stroke_dict = __class__.get_stroke_dict("/mnt/storage/ntunggal/cangjie5.dict.yaml")
             self.stroke_dict = __class__.get_stroke_dict("cangjie5-components.dict.yaml")
 
         # Load spm vocab and merges
@@ -679,11 +679,13 @@ class ChineseBPETokenizer(ChineseTokenizerBase):
             max_examples: Number of examples to use for training.
             model_prefix: Prefix for the SentencePiece model file.
         """        
+        
         os.makedirs(save_directory, exist_ok=True)
         temp_file = os.path.join(save_directory, "temp_text.txt")
-
+        
         assert input_method in ['pinyin_tone_above', 'pinyin_tone_after', 'zhuyin', 'wubi', 'cangjie']
         stroke_dict = None
+        # TODO: fix path mess
         if input_method == "wubi":
             #stroke_dict = cls.get_stroke_dict("/mnt/storage/ntunggal/wubi86.dict.yaml")
             stroke_dict = cls.get_stroke_dict("wubi86-components.dict.yaml")
@@ -748,7 +750,7 @@ class RepackagedByteTokenizer(ChineseTokenizerBase):
     ):
         bos_token = AddedToken(bos_token, lstrip=False, rstrip=False)
         eos_token = AddedToken(eos_token, lstrip=False, rstrip=False)
-        unk_token = AddedToken(unk_token, lstrip=False, rstrip=False)
+        unk_token = AddedToken("<unk>", lstrip=False, rstrip=False)
         pad_token = AddedToken(pad_token, lstrip=False, rstrip=False)
         
         self.n_positions = n_positions
@@ -794,30 +796,30 @@ class RepackagedByteTokenizer(ChineseTokenizerBase):
             input_method: Input method to pretokenize by.
             sp_path: Path to SentencePiece model file for getting pretokenized tokens. 
         """
-        def get_pretokens(text):
-            """Tokenizes pretokenized text into a list of its pretokens."""
-            sp = spm.SentencePieceProcessor()
-            sp.load(sp_path)
-            return sp.encode(text, out_type=str)
+        sp = spm.SentencePieceProcessor()
+        sp.load(sp_path)
 
         # Count pretokens in pretokenized text
         tk_counts = Counter()
         for i, example in enumerate(train_dataset, start=1):
             text = example["text"].strip()
             if text:
-                pretokenized_text = cls._pretokenize(text, input_method)
-                assert sp_path
-                pretokens = get_pretokens(pretokenized_text)
+                if input_method != "": # "" is subword
+                    text = cls._pretokenize(text, input_method)
+                pretokens = sp.encode(text, out_type=str)
                 tk_counts.update(pretokens)
             if max_examples is not None and i >= max_examples:
                 break
+            if (i % 10000) == 0:
+                print(f"Processed example {i}", flush=True)
         
         # Assign tokens to UTF-8 representations in freq order
         tk_list = [tok for tok, count in tk_counts.most_common()]
+        tk_list.append("<unk>")
         tk_iter = iter(tk_list)
         remapped_dict = {}
 
-        # Helper function to assign UTF-8
+        # Helper function to assign UTF-8. r = new UTF-8 representation
         def assign_mapping(r):
             try:
                 tok = next(tk_iter)
@@ -875,10 +877,12 @@ class RepackagedByteTokenizer(ChineseTokenizerBase):
 
     def _tokenize(self, text):
         """Tokenize a string. Returns a list of strings (tokens)."""
-        pretokenized_text = self._pretokenize(text, self.input_method)
-        pretokens = self.sp.encode(pretokenized_text, out_type=str)
-        tokens = [self.remapped_utf8.get(tok, self.unk_token) for tok in pretokens]
-        return tokens
+        if self.input_method != "": # "" is subword
+            text = self._pretokenize(text, self.input_method)
+        pretokens = self.sp.encode(text, out_type=str)
+        utf8_strings = [self.remapped_utf8.get(tok, self.remapped_utf8.get(self.unk_token)) for tok in pretokens]
+        print(f"utf8_strings: {utf8_strings}", flush=True)
+        return [char for s in utf8_strings for char in s]
 
     def _convert_token_to_id(self, token):
         """Converts a token (str) in an id using the vocab."""
@@ -903,7 +907,7 @@ class RepackagedByteTokenizer(ChineseTokenizerBase):
             if token in config['special_tokens']:
                 kwargs[token] = config['special_tokens'][token]
         input_method = config['input_method']
-        if input_method in ['pinyin_tone_above', 'pinyin_tone_after', 'zhuyin', 'wubi', 'cangjie']:
+        if input_method in ['pinyin_tone_above', 'pinyin_tone_after', 'zhuyin', 'wubi', 'cangjie', '']:
             kwargs['input_method'] = input_method
         else:
             raise ValueError(f"Received invalid input_method: {input_method}.")

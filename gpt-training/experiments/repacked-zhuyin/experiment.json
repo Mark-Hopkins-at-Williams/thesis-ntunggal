@@ -6,10 +6,10 @@
         "special_tokens": {
             "pad_token": "<pad>"
         },
-        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/repacked-pinyin-after",
+        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/repacked-zhuyin",
         "vocab_file_name": "remapped_utf8_byte.pkl",
-        "input_method": "pinyin_tone_after",
-        "sp_path": "/mnt/storage/ntunggal/tokenizer-files/pinyin-after-bpe/chinese_bpe.model"
+        "input_method": "zhuyin",
+        "sp_path": "/mnt/storage/ntunggal/tokenizer-files/zhuyin-bpe/chinese_bpe.model"
     },
     "model": {
         "n_positions": 1024,
