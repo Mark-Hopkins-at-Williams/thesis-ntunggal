@@ -248,8 +248,6 @@ class CharacterTokenizer(CustomTokenizerBase):
         special_tokens=[], 
         max_vocab_size=50257, 
         max_examples=None,
-        model_prefix="",
-        input_method="",
     ):
         """
         Creates and saves a vocab.json file.
@@ -260,7 +258,6 @@ class CharacterTokenizer(CustomTokenizerBase):
             special_tokens: List of special tokens to include.
             max_vocab_size: Max vocabulary size.
             max_examples: Number of examples to use for training.
-            model_prefix: Prefix for the SentencePiece model file.
         """
         char_counter = Counter()
         for i, example in enumerate(train_dataset, start=1):
@@ -360,7 +357,6 @@ class SubwordBPETokenizer(CustomTokenizerBase):
         max_vocab_size=50257, 
         max_examples=None,
         model_prefix="bpe_tokenizer",
-        input_method="",
     ):
         """
         Creates a SentencePiece model and saves vocab.json and spm.model.
@@ -545,7 +541,6 @@ class ByteBPETokenizer(CustomTokenizerBase):
         max_vocab_size=50257, 
         max_examples=None,
         model_prefix="byte_bpe",
-        input_method="",
     ):
         """
         Creates a SentencePiece model and saves vocab.json and spm.model.
@@ -761,6 +756,16 @@ class RepackagedByteTokenizer(ChineseTokenizerBase):
         self.sp = spm.SentencePieceProcessor()
         self.sp.load(sp_path)
 
+        # Load dictionaries for wubi and cangjie
+        # TODO: fix path mess
+        self.stroke_dict = None
+        if self.input_method == "wubi":
+            #self.stroke_dict = __class__.get_stroke_dict("/mnt/storage/ntunggal/wubi86.dict.yaml")
+            self.stroke_dict = __class__.get_stroke_dict("wubi86-components.dict.yaml")
+        elif self.input_method == "cangjie":
+            #self.stroke_dict = __class__.get_stroke_dict("/mnt/storage/ntunggal/cangjie5.dict.yaml")
+            self.stroke_dict = __class__.get_stroke_dict("cangjie5-components.dict.yaml")
+        
         with open(vocab_file, "rb") as f:
             self.remapped_utf8 = pickle.load(f)
             
@@ -778,10 +783,7 @@ class RepackagedByteTokenizer(ChineseTokenizerBase):
         cls, 
         train_dataset, 
         save_directory, 
-        special_tokens=[], 
-        max_vocab_size=50257, 
         max_examples=None,
-        model_prefix="repackaged_byte_tokenizer",
         input_method="",
         sp_path=""
     ):
@@ -799,13 +801,22 @@ class RepackagedByteTokenizer(ChineseTokenizerBase):
         sp = spm.SentencePieceProcessor()
         sp.load(sp_path)
 
+        stroke_dict = None
+        # TODO: fix path mess
+        if input_method == "wubi":
+            #stroke_dict = cls.get_stroke_dict("/mnt/storage/ntunggal/wubi86.dict.yaml")
+            stroke_dict = cls.get_stroke_dict("wubi86-components.dict.yaml")
+        elif input_method == "cangjie":
+            #stroke_dict = cls.get_stroke_dict("/mnt/storage/ntunggal/cangjie5.dict.yaml")
+            stroke_dict = cls.get_stroke_dict("cangjie5-components.dict.yaml")
+
         # Count pretokens in pretokenized text
         tk_counts = Counter()
         for i, example in enumerate(train_dataset, start=1):
             text = example["text"].strip()
             if text:
                 if input_method != "": # "" is subword
-                    text = cls._pretokenize(text, input_method)
+                    text = cls._pretokenize(text, input_method, stroke_dict)
                 pretokens = sp.encode(text, out_type=str)
                 tk_counts.update(pretokens)
             if max_examples is not None and i >= max_examples:
@@ -878,10 +889,9 @@ class RepackagedByteTokenizer(ChineseTokenizerBase):
     def _tokenize(self, text):
         """Tokenize a string. Returns a list of strings (tokens)."""
         if self.input_method != "": # "" is subword
-            text = self._pretokenize(text, self.input_method)
+            text = self._pretokenize(text, self.input_method, self.stroke_dict)
         pretokens = self.sp.encode(text, out_type=str)
         utf8_strings = [self.remapped_utf8.get(tok, self.remapped_utf8.get(self.unk_token)) for tok in pretokens]
-        print(f"utf8_strings: {utf8_strings}", flush=True)
         return [char for s in utf8_strings for char in s]
 
     def _convert_token_to_id(self, token):
@@ -922,8 +932,6 @@ class RepackagedByteTokenizer(ChineseTokenizerBase):
         return cls.create_vocab(
             train_data,
             save_directory=config['tokenizer_files_dir'],
-            special_tokens=list(config['special_tokens'].values()),
-            max_vocab_size=config.get('max_vocab_size', ''),
             max_examples=config.get('max_examples', ''),
             input_method=config.get('input_method', ''),
             sp_path=sp_path,
