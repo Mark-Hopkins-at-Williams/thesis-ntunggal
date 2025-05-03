@@ -21,7 +21,7 @@ class DefaultGPT2Tokenizer:
 
     def __init__(self, n_positions):
         self.tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
-        self.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+        self.tokenizer.add_special_tokens({'pad_token': '<pad>'})
         self.pad_token_id = self.tokenizer.pad_token_id 
         self.n_positions = n_positions
         
