@@ -30,6 +30,7 @@ def evaluate_unigram_model(model, sequences):
             num_chars += 1
         entropy += -math.log2(model['</s>'])
         num_chars += 1
+    print(f"num chars validation set: {num_chars}", flush=True)
     return entropy
 
 def unigram_model_baseline(text_file):

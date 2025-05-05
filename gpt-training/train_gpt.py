@@ -49,6 +49,7 @@ os.makedirs(logging_dir, exist_ok=True)
 # Load dataset
 print("Loading dataset...", flush=True)
 train_dataset, validation_dataset, entropy = load_baai_data()
+exit()
 
 # Create vocab if needed
 if save_directory != "" and not os.path.exists(save_directory):
@@ -66,23 +67,9 @@ print(f"tokenizer.bos_token_id: {tokenizer.bos_token_id}")
 print(f"tokenizer.eos_token_id: {tokenizer.eos_token_id}")
 print(f"tokenizer.pad_token_id: {tokenizer.pad_token_id}")
 
-#print(f"tokenizer.tokenize(你好,最近怎么样？): {tokenizer.tokenize('你好,最近怎么样?')}")
+print(f"tokenizer.tokenize(你好,最近怎么样？): {tokenizer.tokenize('你好,最近怎么样?')}")
 #print(f"tokenizer.remapped_utf8: {tokenizer.remapped_utf8}")
-test_text = """
-美国旧金山市一间中餐馆Kung Food的老板杨晓川告诉BBC说，近期一段时间，店里未有进行任何加价的举动，但营业额减少了大约两至三成，“有些人可能以前一个礼拜来一次，但现在两个礼拜才来一次。”
-杨晓川说，除此之外，目前餐厅从中国进口的调味料及外卖盒的库存仍能够用上一个多月，在这一刻，还未感受到太大关税带来的的压力。
-受惠于特朗普第一任期内的减税政策，杨晓川成为了特朗普的支持者。最近，很多熟悉他的人也开始问他有没有后悔投票给特朗普。他说，他并没有后悔。
-但他也预料，特朗普的关税政策或许会对他的生意带来影响，导致其从商的经营成本增加。 但杨晓川认为这是难免需要经历的阵痛，他也愿意为自己的选择付出代价，“钱没有了可以再赚”。
-美国于4月宣布对中国加征高达145%的总关税，在中方采取反制措施之后，部分中国商品累加关税甚至高达245%。
-在高额关税的影响下，美国各地的华人商户首当其冲，尤其是依赖中国货品的进口及批发商、唐人街的店铺、华人超市、中餐馆等，都面临着成本上升的压力。
-"""
-test_tokenized = tokenizer.tokenize(test_text)
-from collections import Counter
-c = Counter(test_tokenized)
-print(len(c))
-print(c)
 
-exit()
 config = GPT2Config(
     vocab_size=len(tokenizer),        # Vocabulary size
     n_positions=model_config['n_positions'],    # Maximum length of input sequences (in tokens)

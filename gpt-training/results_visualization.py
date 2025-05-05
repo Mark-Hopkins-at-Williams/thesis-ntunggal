@@ -6,7 +6,7 @@ def visualize_results(path):
     df = pd.read_csv(path)
 
     #df.set_index('step', inplace=True)
-    df.columns = df.columns.str.replace('experiments/', '', regex=False)
+    #df.columns = df.columns.str.replace('experiments/', '', regex=False)
 
     # Bar graph of number of val. tokens
     df = df.T
@@ -15,12 +15,12 @@ def visualize_results(path):
     df_sorted = df.sort_values(by='Num_Tokens', ascending=False)
     plt.figure(figsize=(12, 6))
     plt.bar(df_sorted.index, df_sorted['Num_Tokens'], width=0.5)
-    plt.title("Number of Validation Tokens (Sorted)")
+    plt.title("Per-Token Entropy Ratios by Tokenizer (Sorted)")
     plt.xlabel("Tokenizer")
-    plt.ylabel("Number of Tokens")
+    plt.ylabel("Per-Token Entropy Ratios")
     plt.xticks(rotation=30, ha='right')
     plt.tight_layout()
-    plt.savefig("num_tokens.png", dpi=300)
+    plt.savefig("per_token_entropy_ratios.png", dpi=300)
     plt.show()
     return
     # Bar graph at 20,000 steps
@@ -52,5 +52,5 @@ def visualize_results(path):
     print("Saved figure: over_time.png")
 
 if __name__ == "__main__":
-    # Set to generate num tokens bar graph
-    visualize_results("/mnt/storage/ntunggal/thesis-ntunggal/gpt-training/num_tokens.csv")
+    # Set to generate per-token entropy ratios bar graph
+    visualize_results("/mnt/storage/ntunggal/thesis-ntunggal/gpt-training/per_token_entropy_ratios.csv")
