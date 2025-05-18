@@ -111,9 +111,46 @@ def visualize_per_token_entropy(path):
 
     print("Saved figure: per_token_entropy_ratios.png")
 
+def visualize_num_tokens(path):
+    # Load the CSV file
+    df = pd.read_csv(path)
+
+    # Bar graph of number of val. tokens
+    df = df.T
+    df.columns = ['Num_Tokens']
+    df.index.name = 'Tokenizer'
+    df_sorted = df.sort_values(by='Num_Tokens', ascending=False)
+    df_sorted.index = df_sorted.index.str.replace('experiments/', '', regex=False)
+    df_sorted.index = df_sorted.index.str.replace('subword-bpe', 'character-bpe', regex=False)
+    df_sorted.index = df_sorted.index.str.replace('repacked-subword', 'repacked-character-bpe', regex=False)
+    plt.figure(figsize=(12, 6))
+    bar_colors = [category_colors[tokenizer_categories[tok]] for tok in df_sorted.index]
+    plt.bar(df_sorted.index, df_sorted['Num_Tokens'], width=0.5, color=bar_colors)
+    plt.title("Number of Validation Tokens (Sorted)")
+    plt.xlabel("Tokenizer")
+    plt.ylabel("Number of Tokens")
+    plt.xticks(rotation=30, ha='right')
+
+    # Add legend
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor=color, label=category)
+        for category, color in category_colors.items()
+    ]
+    plt.legend(handles=legend_elements, title='Tokenizer Type')
+
+    plt.tight_layout()
+    plt.savefig("num_tokens.png", dpi=300)
+    plt.show()
+
+    print("Saved figure: num_tokens.png")
+
 if __name__ == "__main__":
     # Generate per-token entropy ratios bar graph
-    visualize_per_token_entropy("/mnt/storage/ntunggal/thesis-ntunggal/gpt-training/per_token_entropy_ratios.csv")
+    # visualize_per_token_entropy("/mnt/storage/ntunggal/thesis-ntunggal/gpt-training/per_token_entropy_ratios.csv")
 
     # Generate main results
-    visualize_results("/mnt/storage/ntunggal/thesis-ntunggal/gpt-training/compiled_entropy_ratios.csv")
+    # visualize_results("/mnt/storage/ntunggal/thesis-ntunggal/gpt-training/compiled_entropy_ratios.csv")
+
+    # View num tokens
+    visualize_num_tokens("/mnt/storage/ntunggal/thesis-ntunggal/gpt-training/num_tokens.csv")
