@@ -49,7 +49,6 @@ os.makedirs(logging_dir, exist_ok=True)
 # Load dataset
 print("Loading dataset...", flush=True)
 train_dataset, validation_dataset, entropy = load_baai_data()
-exit()
 
 # Create vocab if needed
 if save_directory != "" and not os.path.exists(save_directory):
@@ -67,9 +66,10 @@ print(f"tokenizer.bos_token_id: {tokenizer.bos_token_id}")
 print(f"tokenizer.eos_token_id: {tokenizer.eos_token_id}")
 print(f"tokenizer.pad_token_id: {tokenizer.pad_token_id}")
 
-print(f"tokenizer.tokenize(你好,最近怎么样？): {tokenizer.tokenize('你好,最近怎么样?')}")
+print(f"tokenizer._pretokenize(你好,我是机器人): {tokenizer._pretokenize('你好,我是机器人', 'pinyin_tone_after')}")
+print(f"tokenizer.tokenize(你好,我是机器人): {tokenizer.tokenize('你好,我是机器人')}")
 #print(f"tokenizer.remapped_utf8: {tokenizer.remapped_utf8}")
-
+exit()
 config = GPT2Config(
     vocab_size=len(tokenizer),        # Vocabulary size
     n_positions=model_config['n_positions'],    # Maximum length of input sequences (in tokens)
