@@ -1,17 +1,20 @@
 {
     "tokenizer": {
-        "name": "DefaultGPT2Tokenizer",
+        "name": "RepackagedByteTokenizer",
         "max_vocab_size": "",
-        "max_examples": "",
-        "special_tokens": "",
-        "tokenizer_files_dir": "",
-        "vocab_file_name": "",
-        "input_method": ""
+        "max_examples": 1000000,
+        "special_tokens": {
+            "pad_token": "<pad>"
+        },
+        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/repacked-wubi",
+        "vocab_file_name": "remapped_utf8_byte.pkl",
+        "input_method": "wubi",
+        "sp_path": "/mnt/storage/ntunggal/tokenizer-files/wubi-bpe/chinese_bpe.model"
     },
     "model": {
         "n_positions": 1024,
         "n_ctx": 1024,
-        "n_embd": 768,
+        "n_embd": 1056,
         "n_layer": 6,
         "n_head": 12,
         "activation_function": "gelu"

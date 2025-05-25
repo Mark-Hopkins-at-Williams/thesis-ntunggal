@@ -1,11 +1,13 @@
 {
     "tokenizer": {
-        "name": "DefaultGPT2Tokenizer",
-        "max_vocab_size": "",
-        "max_examples": "",
-        "special_tokens": "",
-        "tokenizer_files_dir": "",
-        "vocab_file_name": "",
+        "name": "SubwordBPETokenizer",
+        "max_vocab_size": 50257,
+        "max_examples": 1000000,
+        "special_tokens": {
+            "pad_token": "<pad>"
+        },
+        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/subword-bpe",
+        "vocab_file_name": "bpe_tokenizer.model",
         "input_method": ""
     },
     "model": {

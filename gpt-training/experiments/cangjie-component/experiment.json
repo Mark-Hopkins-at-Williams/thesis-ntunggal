@@ -1,12 +1,14 @@
 {
     "tokenizer": {
-        "name": "DefaultGPT2Tokenizer",
-        "max_vocab_size": "",
-        "max_examples": "",
-        "special_tokens": "",
-        "tokenizer_files_dir": "",
-        "vocab_file_name": "",
-        "input_method": ""
+        "name": "ChineseBPETokenizer",
+        "max_vocab_size": 50257,
+        "max_examples": 1000000,
+        "special_tokens": {
+            "pad_token": "<pad>"
+        },
+        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/cangjie-component-bpe",
+        "vocab_file_name": "chinese_bpe.model",
+        "input_method": "cangjie"
     },
     "model": {
         "n_positions": 1024,

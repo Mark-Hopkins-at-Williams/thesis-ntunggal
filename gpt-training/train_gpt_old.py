@@ -3,7 +3,6 @@ import json
 import os
 from os.path import join
 import sys
-import math
 from tokenization import (CharacterTokenizer,
                           SubwordBPETokenizer,
                           ByteTokenizer,
@@ -34,42 +33,73 @@ with open(join(experiment_dir, 'experiment.json')) as reader:
 tokenizer_config = experiment_config['tokenizer']
 model_config = experiment_config['model']
 training_config = experiment_config['training']
-
-Tokenizer = TOKENIZERS[tokenizer_config['name']]
-save_directory = tokenizer_config['tokenizer_files_dir']
-print(f"Tokenizer: {tokenizer_config['name']}", flush=True)
-if tokenizer_config['name'] in ["ChineseBPETokenizer", "RepackagedByteTokenizer"]:
-    print(f"Input method: {tokenizer_config['input_method']}", flush=True)
-
 checkpoints_dir = join(experiment_dir, "checkpoints")
 logging_dir = join(experiment_dir, "logs")
 os.makedirs(checkpoints_dir, exist_ok=True)
 os.makedirs(logging_dir, exist_ok=True)
 
-# Load dataset
+# Set the tokenizer from config
+print(f"Tokenizer: {tokenizer_config['name']}", flush=True)
+input_method = tokenizer_config['input_method']
+assert input_method in ['pinyin_tone_above', 'pinyin_tone_after', 'zhuyin', 'wubi', 'cangjie', '']
+if tokenizer_config['name'] in ["ChineseBPETokenizer", "RepackagedByteTokenizer"]:
+    print(f"Input method: {input_method}", flush=True)
+Tokenizer = TOKENIZERS[tokenizer_config['name']]
+max_vocab_size = tokenizer_config['max_vocab_size']
+max_examples = tokenizer_config['max_examples'] if tokenizer_config['max_examples'] != "" else None
+special_tokens = tokenizer_config['special_tokens']
+save_directory = tokenizer_config['tokenizer_files_dir']
+vocab_file_path = join(save_directory, tokenizer_config['vocab_file_name'])
+
+# Load dataset and vocab files
 print("Loading dataset...", flush=True)
 train_dataset, validation_dataset, entropy = load_baai_data()
-
-# Create vocab if needed
 if save_directory != "" and not os.path.exists(save_directory):
-    print("Creating vocab...", flush=True)
-    Tokenizer.create_vocab_from_config(train_dataset, tokenizer_config)
+    print("Creating vocab and merges...", flush=True)
+    
+    # TODO: fix hardcoding (set to pinyin-after-bpe)
+    if tokenizer_config['name'] == "RepackagedByteTokenizer":
+        Tokenizer.create_vocab(train_dataset, 
+                           save_directory, 
+                           special_tokens=list(special_tokens.values()), 
+                           max_vocab_size=max_vocab_size, 
+                           max_examples=max_examples,
+                           input_method=input_method,
+                           sp_path="/mnt/storage/ntunggal/tokenizer-files/pinyin-after-bpe/chinese_bpe.model")
+    else:
+        Tokenizer.create_vocab(train_dataset, 
+                           save_directory, 
+                           special_tokens=list(special_tokens.values()), 
+                           max_vocab_size=max_vocab_size, 
+                           max_examples=max_examples,
+                           input_method=input_method)
 
-# Instantiate tokenizer
+# Create the tokenizer
 print("Creating tokenizer...", flush=True)
-tokenizer = Tokenizer.from_config(tokenizer_config, model_config['n_positions'])
+tokenizer_kwargs = {
+    'vocab_file': vocab_file_path,
+    'n_positions': model_config['n_positions'],
+}
+for key in ['unk_token', 'bos_token', 'eos_token', 'pad_token']:
+    if key in special_tokens:
+        tokenizer_kwargs[key] = special_tokens[key]
+if input_method != '':
+    tokenizer_kwargs['input_method'] = input_method
 
-# Log tokenizer info
+tokenizer = Tokenizer(**tokenizer_kwargs)
+
 print(f"len(tokenizer): {len(tokenizer)}")
 print(f"tokenizer.unk_token_id: {tokenizer.unk_token_id}")
 print(f"tokenizer.bos_token_id: {tokenizer.bos_token_id}")
 print(f"tokenizer.eos_token_id: {tokenizer.eos_token_id}")
 print(f"tokenizer.pad_token_id: {tokenizer.pad_token_id}")
 
-print(f"tokenizer._pretokenize(你好,我是机器人): {tokenizer._pretokenize('你好,我是机器人', 'pinyin_tone_after')}")
-print(f"tokenizer.tokenize(你好,我是机器人): {tokenizer.tokenize('你好,我是机器人')}")
-#print(f"tokenizer.remapped_utf8: {tokenizer.remapped_utf8}")
+print(f"tokenizer.tokenize(你好,最近怎么样？): {tokenizer.tokenize('你好,最近怎么样？')}")
+print(f"tokenizer.remapped_utf8: {tokenizer.remapped_utf8}")
+
+# TODO: currently testing repacked tokenizer
 exit()
+
 config = GPT2Config(
     vocab_size=len(tokenizer),        # Vocabulary size
     n_positions=model_config['n_positions'],    # Maximum length of input sequences (in tokens)
@@ -106,7 +136,7 @@ class CustomTrainer(Trainer):
     def evaluate(self, eval_dataset=None, ignore_keys=None, metric_key_prefix="eval"):
         eval_results = super().evaluate(eval_dataset, ignore_keys, metric_key_prefix)
         loss_key = metric_key_prefix + "_loss"
-        loss = eval_results[loss_key] / math.log(2)
+        loss = eval_results[loss_key]
         entropy_ratio = (loss * num_validation_tokens) / entropy
         entropy_ratios.append(entropy_ratio)
         eval_results[metric_key_prefix + "_entropy_ratio"] = entropy_ratio      

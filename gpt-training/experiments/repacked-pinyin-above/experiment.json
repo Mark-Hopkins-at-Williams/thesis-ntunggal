@@ -1,0 +1,31 @@
+{
+    "tokenizer": {
+        "name": "RepackagedByteTokenizer",
+        "max_vocab_size": "",
+        "max_examples": 1000000,
+        "special_tokens": {
+            "pad_token": "<pad>"
+        },
+        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/repacked-pinyin-above",
+        "vocab_file_name": "remapped_utf8_byte.pkl",
+        "input_method": "pinyin_tone_above",
+        "sp_path": "/mnt/storage/ntunggal/tokenizer-files/pinyin-above-bpe/chinese_bpe.model"
+    },
+    "model": {
+        "n_positions": 1024,
+        "n_ctx": 1024,
+        "n_embd": 1056,
+        "n_layer": 6,
+        "n_head": 12,
+        "activation_function": "gelu"
+    },
+    "training": {
+        "eval_steps": 1000,
+        "max_steps": 20000,
+        "batch_size": 16,
+        "learning_rate": 5e-5,
+        "weight_decay": 0.01,
+        "warmup_steps": 500,
+        "max_grad_norm": 1
+    }
+}

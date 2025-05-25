@@ -1,11 +1,16 @@
 {
     "tokenizer": {
-        "name": "DefaultGPT2Tokenizer",
-        "max_vocab_size": "",
+        "name": "CharacterTokenizer",
+        "max_vocab_size": 50257,
         "max_examples": "",
-        "special_tokens": "",
-        "tokenizer_files_dir": "",
-        "vocab_file_name": "",
+        "special_tokens": {
+            "unk_token": "<unk>",
+            "bos_token": "<bos>",
+            "eos_token": "<eos>",
+            "pad_token": "<pad>"
+        },
+        "tokenizer_files_dir": "/mnt/storage/ntunggal/tokenizer-files/character",
+        "vocab_file_name": "vocab.json",
         "input_method": ""
     },
     "model": {
